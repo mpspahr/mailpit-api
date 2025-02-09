@@ -274,12 +274,16 @@ export interface ChaosTriggersResponse {
 export class MailpitClient {
   private axiosInstance: AxiosInstance;
 
-  constructor(baseURL: string) {
+  constructor(baseURL: string, username?: string, password?: string) {
     this.axiosInstance = axios.create({
       baseURL: baseURL,
       validateStatus: function (status) {
         return status === 200;
       },
+      auth: (username && password) ? {
+        username,
+        password
+      } : undefined
     });
   }
 
