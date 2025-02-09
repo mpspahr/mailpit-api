@@ -17,7 +17,8 @@
   "scripts": {
     "test": "echo \"TODO: Add tests\" && exit 0",
     "build": "rm -fr dist/* && tsc -p tsconfig.json && tsc -p tsconfig-cjs.json && ./fixup_type",
-    "pretty": "npx prettier . --write"
+    "pretty": "npx prettier . --write",
+    "lint": "npx eslint --fix"
   },
   "keywords": [
     "mailpit-api",

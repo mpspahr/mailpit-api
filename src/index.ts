@@ -1,5 +1,25 @@
 import axios, { AxiosInstance } from "axios";
 
+// Common types
+interface EmailAddress {
+  Address: string;
+  Name: string;
+}
+
+interface Attachment {
+  ContentID: string;
+  ContentType: string;
+  FileName: string;
+  PartID: string;
+  Size: number;
+}
+
+interface ChaosTrigger {
+  ErrorCode: number;
+  Probability: number;
+}
+
+// Responses and Requests
 export interface MailpitInfoResponse {
   Database: string;
   DatabaseSize: number;
@@ -34,49 +54,22 @@ export interface MailpitConfigurationResponse {
 }
 
 export interface MailpitMessageSummaryResponse {
-  Attachments: {
-    ContentID: string;
-    ContentType: string;
-    FileName: string;
-    PartID: string;
-    Size: number;
-  }[];
-  Bcc: {
-    Address: string;
-    Name: string;
-  }[];
-  Cc: {
-    Address: string;
-    Name: string;
-  }[];
+  Attachments: Attachment[];
+  Bcc: EmailAddress[];
+  Cc: EmailAddress[];
   Date: string;
-  From: {
-    Address: string;
-    Name: string;
-  };
+  From: EmailAddress;
   HTML: string;
   ID: string;
-  Inline: {
-    ContentID: string;
-    ContentType: string;
-    FileName: string;
-    PartID: string;
-    Size: number;
-  }[];
+  Inline: Attachment[];
   MessageID: string;
-  ReplyTo: {
-    Address: string;
-    Name: string;
-  }[];
+  ReplyTo: EmailAddress[];
   ReturnPath: string;
   Size: number;
   Subject: string;
   Tags: string[];
   Text: string;
-  To: {
-    Address: string;
-    Name: string;
-  }[];
+  To: EmailAddress[];
 }
 
 export interface MailpitMessagesSummaryResponse {
@@ -89,26 +82,11 @@ export interface MailpitMessagesSummaryResponse {
     ID: string;
     MessageID: string;
     Read: boolean;
-    Bcc: {
-      Address: string;
-      Name: string;
-    }[];
-    Cc: {
-      Address: string;
-      Name: string;
-    }[];
-    From: {
-      Address: string;
-      Name: string;
-    };
-    ReplyTo: {
-      Address: string;
-      Name: string;
-    }[];
-    To: {
-      Address: string;
-      Name: string;
-    }[];
+    Bcc: EmailAddress[];
+    Cc: EmailAddress[];
+    From: EmailAddress;
+    ReplyTo: EmailAddress[];
+    To: EmailAddress[];
   }[];
   messages_count: number;
   start: number;
@@ -127,29 +105,17 @@ export interface MailpitSendRequest {
     Filename: string;
   }[];
   Bcc: string[];
-  Cc: {
-    Email: string;
-    Name: string;
-  }[];
-  From: {
-    Email: string;
-    Name: string;
-  };
+  Cc: EmailAddress[];
+  From: EmailAddress;
   HTML: string;
   Headers: {
     [key: string]: string;
   };
-  ReplyTo: {
-    Email: string;
-    Name: string;
-  }[];
+  ReplyTo: EmailAddress[];
   Subject: string;
   Tags: string[];
   Text: string;
-  To: {
-    Email: string;
-    Name: string;
-  }[];
+  To: EmailAddress[];
 }
 
 export interface MailpitSendMessageConfirmationResponse {
@@ -242,33 +208,15 @@ export interface MailpitSetTagsRequest {
 }
 
 export interface ChaosTriggersRequest {
-  Authentication?: {
-    ErrorCode: number;
-    Probability: number;
-  };
-  Recipient?: {
-    ErrorCode: number;
-    Probability: number;
-  };
-  Sender?: {
-    ErrorCode: number;
-    Probability: number;
-  };
+  Authentication?: ChaosTrigger;
+  Recipient?: ChaosTrigger;
+  Sender?: ChaosTrigger;
 }
 
 export interface ChaosTriggersResponse {
-  Authentication: {
-    ErrorCode: number;
-    Probability: number;
-  };
-  Recipient?: {
-    ErrorCode: number;
-    Probability: number;
-  };
-  Sender?: {
-    ErrorCode: number;
-    Probability: number;
-  };
+  Authentication: ChaosTrigger;
+  Recipient?: ChaosTrigger;
+  Sender?: ChaosTrigger;
 }
 
 export class MailpitClient {
