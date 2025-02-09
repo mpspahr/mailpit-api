@@ -295,19 +295,23 @@ export class MailpitClient {
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error)) {
+        const url = error.config?.url || "UNKNOWN URL";
+        const method = error.config?.method?.toUpperCase() || "UNKNOWN METHOD";
         if (error.response) {
           // Server responded with a status other than 2xx
           throw new Error(
-            `Mailpit API Error: ${error.response.status} ${error.response.statusText}: ${JSON.stringify(error.response.data)}`,
+            `Mailpit API Error: ${error.response.status} ${error.response.statusText} at ${method} ${url}: ${JSON.stringify(error.response.data)}`,
           );
         } else if (error.request) {
           // Request was made but no response was received
           throw new Error(
-            "Mailpit API Error: No response received from server.",
+            `Mailpit API Error: No response received from server at ${method} ${url}`,
           );
         } else {
           // Something happened in setting up the request
-          throw new Error(`Mailpit API Error: ${error.message}`);
+          throw new Error(
+            `Mailpit API Error: ${error.message} at ${method} ${url}`,
+          );
         }
       } else {
         throw new Error("Unexpected Error: " + error);
