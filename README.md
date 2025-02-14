@@ -27,3 +27,5 @@ const messages = await mailpit.listMessages();
 // Delete all messages
 await mailpit.deleteMessages();
 ```
+
+## Documentation
