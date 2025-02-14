@@ -8,27 +8,36 @@ import axios, {
 interface Address {
   Address: string;
   Name: string;
-}
+};
 
 interface Email {
   Email: string;
   Name: string;
 }
 
+/**
+ * Represents an attachment in an email message.
+ */
 interface Attachment {
   ContentID: string;
   ContentType: string;
   FileName: string;
   PartID: string;
   Size: number;
-}
+};
 
+/**
+ * Represents a chaos trigger for the Mailpit API.
+ */
 interface ChaosTrigger {
   ErrorCode: number;
   Probability: number;
-}
+};
 
 // Responses and Requests
+/**
+ * Response from the Mailpit API containing information about the Mailpit instance.
+ */
 export interface MailpitInfoResponse {
   Database: string;
   DatabaseSize: number;
@@ -48,8 +57,11 @@ export interface MailpitInfoResponse {
   };
   Unread: number;
   Version: string;
-}
+};
 
+/**
+ * Response from the Mailpit API containing configuration details.
+ */
 export interface MailpitConfigurationResponse {
   DuplicatesIgnored: boolean;
   Label: string;
@@ -60,8 +72,11 @@ export interface MailpitConfigurationResponse {
     ReturnPath: string;
     SMTPServer: string;
   };
-}
+};
 
+/**
+ * Summary of a single message from the Mailpit API.
+ */
 export interface MailpitMessageSummaryResponse {
   Attachments: Attachment[];
   Bcc: Address[];
@@ -81,6 +96,9 @@ export interface MailpitMessageSummaryResponse {
   To: Address[];
 }
 
+/**
+ * Response from the Mailpit API containing a summary of multiple messages.
+ */
 export interface MailpitMessagesSummaryResponse {
   messages: {
     Attachments: number;
@@ -102,12 +120,18 @@ export interface MailpitMessagesSummaryResponse {
   tags: string[];
   total: number;
   unread: number;
-}
+};
 
+/**
+ * Response from the Mailpit API containing message headers.
+ */
 export interface MailpitMessageHeadersResponse {
   [key: string]: string;
-}
+};
 
+/**
+ * Request to send a message via the Mailpit API.
+ */
 export interface MailpitSendRequest {
   Attachments: {
     Content: string;
@@ -127,10 +151,16 @@ export interface MailpitSendRequest {
   To: Email[];
 }
 
+/**
+ * Response from the Mailpit API confirming a sent message.
+ */
 export interface MailpitSendMessageConfirmationResponse {
   ID: string;
-}
+};
 
+/**
+ * Response from the Mailpit API containing HTML check results.
+ */
 export interface MailpitHTMLCheckResponse {
   Platforms: {
     [key: string]: [string];
@@ -168,8 +198,11 @@ export interface MailpitHTMLCheckResponse {
     Title: string;
     URL: string;
   }[];
-}
+};
 
+/**
+ * Response from the Mailpit API containing link check results.
+ */
 export interface MailpitLinkCheckResponse {
   Errors: number;
   Links: {
@@ -177,8 +210,11 @@ export interface MailpitLinkCheckResponse {
     StatusCode: number;
     URL: string;
   }[];
-}
+};
 
+/**
+ * Response from the Mailpit API containing SpamAssassin check results.
+ */
 export interface MailpitSpamAssassinResponse {
   Errors: number;
   IsSpam: boolean;
@@ -188,61 +224,92 @@ export interface MailpitSpamAssassinResponse {
     Score: number;
   }[];
   Score: number;
-}
+};
 
+/**
+ * Request to set read status of messages via the Mailpit API.
+ */
 export interface MailpitReadStatusRequest {
   IDs: string[];
   Read: boolean;
-}
+};
 
+/**
+ * Request to delete messages via the Mailpit API.
+ */
 export interface MailpitDeleteRequest {
   IDs: string[];
-}
+};
 
+/**
+ * Request to search messages via the Mailpit API.
+ */
 export interface MailpitSearchRequest {
   query: string;
   start?: number;
   limit?: number;
   tz?: string;
-}
+};
 
+/**
+ * Request to delete messages by search via the Mailpit API.
+ */
 export interface MailpitSearchDeleteRequest {
   query: string;
   tz?: string;
-}
+};
 
+/**
+ * Request to set tags on messages via the Mailpit API.
+ */
 export interface MailpitSetTagsRequest {
   IDs: string[];
   Tags: string[];
-}
+};
 
+/**
+ * Request to set chaos triggers via the Mailpit API.
+ */
 export interface ChaosTriggersRequest {
   Authentication?: ChaosTrigger;
   Recipient?: ChaosTrigger;
   Sender?: ChaosTrigger;
-}
+};
 
+/**
+ * Response from the Mailpit API containing chaos triggers.
+ */
 export interface ChaosTriggersResponse {
   Authentication: ChaosTrigger;
   Recipient?: ChaosTrigger;
   Sender?: ChaosTrigger;
-}
+};
 
 interface AttachmentResponse {
   data: ArrayBuffer;
   contentType: string;
 }
 
+/**
+ * Client for interacting with the Mailpit API.
+ */
 export class MailpitClient {
   private axiosInstance: AxiosInstance;
 
+  /**
+   * Creates an instance of MailpitClient.
+   * @param baseURL - The base URL of the Mailpit API.
+   * @param auth - Optional authentication credentials.
+   * @param auth.username - The username for basic authentication.
+   * @param auth.password - The password for basic authentication.
+   */
   constructor(baseURL: string, auth?: { username: string; password: string }) {
     this.axiosInstance = axios.create({
       baseURL,
       auth,
       validateStatus: function (status) {
         return status === 200;
-      },
+      }
     });
   }
 
@@ -287,20 +354,31 @@ export class MailpitClient {
     }
   }
 
-  // Application
+  /**
+   * Retrieves information about the Mailpit instance.
+   * @returns A promise that resolves to a MailpitInfoResponse.
+   */
   public async getInfo(): Promise<MailpitInfoResponse> {
     return await this.handleRequest(() =>
       this.axiosInstance.get<MailpitInfoResponse>("/api/v1/info"),
     );
   }
 
+  /**
+   * Retrieves the configuration of the Mailpit instance.
+   * @returns A promise that resolves to a MailpitConfigurationResponse.
+   */
   public async getConfiguration(): Promise<MailpitConfigurationResponse> {
     return await this.handleRequest(() =>
       this.axiosInstance.get<MailpitConfigurationResponse>("/api/v1/webui"),
     );
   }
 
-  // Message
+  /**
+   * Retrieves a summary of a specific message.
+   * @param id - The ID of the message. Defaults to "latest".
+   * @returns A promise that resolves to a MailpitMessageSummaryResponse.
+   */
   public async getMessageSummary(
     id: string = "latest",
   ): Promise<MailpitMessageSummaryResponse> {
@@ -311,6 +389,11 @@ export class MailpitClient {
     );
   }
 
+  /**
+   * Retrieves the headers of a specific message.
+   * @param id - The ID of the message. Defaults to "latest".
+   * @returns A promise that resolves to a MailpitMessageHeadersResponse.
+   */
   public async getMessageHeaders(
     id: string = "latest",
   ): Promise<MailpitMessageHeadersResponse> {
@@ -321,6 +404,12 @@ export class MailpitClient {
     );
   }
 
+  /**
+   * Retrieves a specific attachment of a message.
+   * @param id - The ID of the message.
+   * @param partID - The part ID of the attachment.
+   * @returns A promise that resolves to a string containing the attachment.
+   */
   public async getMessageAttachment(
     id: string,
     partID: string,
@@ -339,12 +428,23 @@ export class MailpitClient {
     };
   }
 
+  /**
+   * Retrieves the raw source of a specific message.
+   * @param id - The ID of the message. Defaults to "latest".
+   * @returns A promise that resolves to a string containing the raw message source.
+   */
   public async getMessageSource(id: string = "latest"): Promise<string> {
     return await this.handleRequest(() =>
       this.axiosInstance.get<string>(`/api/v1/message/${id}/raw`),
     );
   }
 
+  /**
+   * Retrieves the thumbnail of a specific attachment.
+   * @param id - The ID of the message.
+   * @param partID - The part ID of the attachment.
+   * @returns A promise that resolves to a string containing the thumbnail.
+   */
   public async getAttachmentThumbnail(
     id: string,
     partID: string,
@@ -365,6 +465,12 @@ export class MailpitClient {
     };
   }
 
+  /**
+   * Releases a specific message to the specified recipients.
+   * @param id - The ID of the message.
+   * @param releaseRequest - The release request containing the recipients.
+   * @returns A promise that resolves to a string.
+   */
   public async releaseMessage(
     id: string,
     releaseRequest: { To: string[] },
@@ -377,6 +483,11 @@ export class MailpitClient {
     );
   }
 
+  /**
+   * Sends a message via the Mailpit API.
+   * @param sendReqest - The request containing the message details.
+   * @returns A promise that resolves to a MailpitSendMessageConfirmationResponse.
+   */
   public async sendMessage(
     sendReqest: MailpitSendRequest,
   ): Promise<MailpitSendMessageConfirmationResponse> {
@@ -388,7 +499,11 @@ export class MailpitClient {
     );
   }
 
-  // Other
+  /**
+   * Performs an HTML check on a specific message.
+   * @param id - The ID of the message. Defaults to "latest".
+   * @returns A promise that resolves to a MailpitHTMLCheckResponse.
+   */
   public async htmlCheck(
     id: string = "latest",
   ): Promise<MailpitHTMLCheckResponse> {
@@ -399,6 +514,12 @@ export class MailpitClient {
     );
   }
 
+  /**
+   * Performs a link check on a specific message.
+   * @param id - The ID of the message. Defaults to "latest".
+   * @param follow - Whether to follow links. Defaults to "false".
+   * @returns A promise that resolves to a MailpitLinkCheckResponse.
+   */
   public async linkCheck(
     id: string = "latest",
     follow: "true" | "false" = "false",
@@ -411,6 +532,11 @@ export class MailpitClient {
     );
   }
 
+  /**
+   * Performs a SpamAssassin check on a specific message.
+   * @param id - The ID of the message. Defaults to "latest".
+   * @returns A promise that resolves to a MailpitSpamAssassinResponse.
+   */
   public async spamAssassinCheck(
     id: string = "latest",
   ): Promise<MailpitSpamAssassinResponse> {
@@ -421,7 +547,12 @@ export class MailpitClient {
     );
   }
 
-  // Messages
+  /**
+   * Retrieves a list of messages.
+   * @param start - The starting index. Defaults to 0.
+   * @param limit - The number of messages to retrieve. Defaults to 50.
+   * @returns A promise that resolves to a MailpitMessagesSummaryResponse.
+   */
   public async listMessages(
     start: number = 0,
     limit: number = 50,
@@ -434,6 +565,11 @@ export class MailpitClient {
     );
   }
 
+  /**
+   * Sets the read status of messages.
+   * @param readStatus - The request containing the message IDs and read status.
+   * @returns A promise that resolves to a string.
+   */
   public async setReadStatus(
     readStatus: MailpitReadStatusRequest,
   ): Promise<string> {
@@ -442,6 +578,11 @@ export class MailpitClient {
     );
   }
 
+  /**
+   * Deletes messages.
+   * @param deleteRequest - The request containing the message IDs to delete.
+   * @returns A promise that resolves to a string.
+   */
   public async deleteMessages(
     deleteRequest?: MailpitDeleteRequest,
   ): Promise<string> {
@@ -452,7 +593,11 @@ export class MailpitClient {
     );
   }
 
-  // See https://mailpit.axllent.org/docs/usage/search-filters/
+  /**
+   * Searches for messages.
+   * @param search - The search request containing the query and optional parameters.
+   * @returns A promise that resolves to a MailpitMessagesSummaryResponse.
+   */
   public async searchMessages(
     search: MailpitSearchRequest,
   ): Promise<MailpitMessagesSummaryResponse> {
@@ -463,7 +608,11 @@ export class MailpitClient {
     );
   }
 
-  // See https://mailpit.axllent.org/docs/usage/search-filters/
+  /**
+   * Deletes messages by search.
+   * @param search - The search request containing the query.
+   * @returns A promise that resolves to a string.
+   */
   public async deleteMessagesBySearch(
     search: MailpitSearchDeleteRequest,
   ): Promise<string> {
@@ -472,19 +621,33 @@ export class MailpitClient {
     );
   }
 
-  // Tags
+  /**
+   * Retrieves a list of tags.
+   * @returns A promise that resolves to an array of strings containing the tags.
+   */
   public async getTags(): Promise<string[]> {
     return await this.handleRequest(() =>
       this.axiosInstance.get<string[]>(`/api/v1/tags`),
     );
   }
 
+  /**
+   * Sets tags on messages.
+   * @param request - The request containing the message IDs and tags.
+   * @returns A promise that resolves to a string.
+   */
   public async setTags(request: MailpitSetTagsRequest): Promise<string> {
     return await this.handleRequest(() =>
       this.axiosInstance.put<string>(`/api/v1/tags`, request),
     );
   }
 
+  /**
+   * Renames a tag.
+   * @param tag - The current name of the tag.
+   * @param newTagName - The new name of the tag.
+   * @returns A promise that resolves to a string.
+   */
   public async renameTag(tag: string, newTagName: string): Promise<string> {
     const encodedTag = encodeURI(tag);
     return await this.handleRequest(() =>
@@ -494,6 +657,11 @@ export class MailpitClient {
     );
   }
 
+  /**
+   * Deletes a tag.
+   * @param tag - The name of the tag to delete.
+   * @returns A promise that resolves to a string.
+   */
   public async deleteTag(tag: string): Promise<string> {
     const encodedTag = encodeURI(tag);
     return await this.handleRequest(() =>
@@ -501,7 +669,12 @@ export class MailpitClient {
     );
   }
 
-  // Testing
+  /**
+   * Renders the HTML view of a specific message.
+   * @param id - The ID of the message. Defaults to "latest".
+   * @param embed - Whether to embed images. Defaults to undefined.
+   * @returns A promise that resolves to a string containing the HTML view.
+   */
   public async renderMessageHTML(
     id: string = "latest",
     embed?: 1,
@@ -511,18 +684,32 @@ export class MailpitClient {
     );
   }
 
+  /**
+   * Renders the text view of a specific message.
+   * @param id - The ID of the message. Defaults to "latest".
+   * @returns A promise that resolves to a string containing the text view.
+   */
   public async renderMessageText(id: string = "latest"): Promise<string> {
     return await this.handleRequest(() =>
       this.axiosInstance.get<string>(`/view/${id}.txt`),
     );
   }
 
+  /**
+   * Retrieves the chaos triggers.
+   * @returns A promise that resolves to a ChaosTriggersResponse.
+   */
   public async getChaosTriggers(): Promise<ChaosTriggersResponse> {
     return await this.handleRequest(() =>
       this.axiosInstance.get<ChaosTriggersResponse>("/api/v1/chaos"),
     );
   }
 
+  /**
+   * Sets the chaos triggers.
+   * @param triggers - The request containing the chaos triggers.
+   * @returns A promise that resolves to a ChaosTriggersResponse.
+   */
   public async setChaosTriggers(
     triggers: ChaosTriggersRequest = {},
   ): Promise<ChaosTriggersResponse> {

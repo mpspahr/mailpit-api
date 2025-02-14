@@ -19,7 +19,7 @@
     "build": "rm -fr dist/* && tsc -p tsconfig.json && tsc -p tsconfig-cjs.json && ./fixup_type",
     "pretty": "npx prettier . --write",
     "lint": "npx eslint --fix src",
-    "docs": "typedoc"
+    "docs": "typedoc --readme none"
   },
   "keywords": [
     "mailpit-api",

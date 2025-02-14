@@ -4,3 +4,4 @@ node_modules
 eslint.config.mjs
 .github/
 fixup_type
+docs/
