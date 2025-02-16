@@ -502,9 +502,12 @@ export class MailpitClient {
   }
 
   // Testing
-  public async renderMessageHTML(id: string = "latest"): Promise<string> {
+  public async renderMessageHTML(
+    id: string = "latest",
+    embed?: 1,
+  ): Promise<string> {
     return await this.handleRequest(() =>
-      this.axiosInstance.get<string>(`/view/${id}.html`),
+      this.axiosInstance.get<string>(`/view/${id}.html`, { params: { embed } }),
     );
   }
 

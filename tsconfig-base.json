@@ -20,6 +20,6 @@
     "types": ["node", "jest"]
   },
   "compileOnSave": false,
-  "include": ["src", "eslint.config.mjs", "test.ts"],
+  "include": ["src", "eslint.config.mjs", "test"],
   "exclude": ["node_modules", "dist"]
 }
