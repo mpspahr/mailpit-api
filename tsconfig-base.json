@@ -13,13 +13,13 @@
     "noFallthroughCasesInSwitch": true,
     "pretty": true,
     "resolveJsonModule": true,
-    "rootDir": "src",
+    "rootDir": ".",
     "skipLibCheck": true,
     "strict": true,
     "traceResolution": false,
     "types": ["node", "jest"]
   },
   "compileOnSave": false,
-  "exclude": ["node_modules", "dist"],
-  "include": ["src"]
+  "include": ["src", "eslint.config.mjs", "test.ts"],
+  "exclude": ["node_modules", "dist"]
 }

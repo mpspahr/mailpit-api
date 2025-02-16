@@ -1,8 +1,17 @@
-import axios, { AxiosInstance } from "axios";
+import axios, {
+  type AxiosInstance,
+  type AxiosResponse,
+  isAxiosError,
+} from "axios";
 
 // Common types
-interface EmailAddress {
+interface Address {
   Address: string;
+  Name: string;
+}
+
+interface Email {
+  Email: string;
   Name: string;
 }
 
@@ -55,21 +64,21 @@ export interface MailpitConfigurationResponse {
 
 export interface MailpitMessageSummaryResponse {
   Attachments: Attachment[];
-  Bcc: EmailAddress[];
-  Cc: EmailAddress[];
+  Bcc: Address[];
+  Cc: Address[];
   Date: string;
-  From: EmailAddress;
+  From: Address;
   HTML: string;
   ID: string;
   Inline: Attachment[];
   MessageID: string;
-  ReplyTo: EmailAddress[];
+  ReplyTo: Address[];
   ReturnPath: string;
   Size: number;
   Subject: string;
   Tags: string[];
   Text: string;
-  To: EmailAddress[];
+  To: Address[];
 }
 
 export interface MailpitMessagesSummaryResponse {
@@ -82,11 +91,11 @@ export interface MailpitMessagesSummaryResponse {
     ID: string;
     MessageID: string;
     Read: boolean;
-    Bcc: EmailAddress[];
-    Cc: EmailAddress[];
-    From: EmailAddress;
-    ReplyTo: EmailAddress[];
-    To: EmailAddress[];
+    Bcc: Address[];
+    Cc: Address[];
+    From: Address;
+    ReplyTo: Address[];
+    To: Address[];
   }[];
   messages_count: number;
   start: number;
@@ -105,17 +114,17 @@ export interface MailpitSendRequest {
     Filename: string;
   }[];
   Bcc: string[];
-  Cc: EmailAddress[];
-  From: EmailAddress;
+  Cc: Email[];
+  From: Email;
   HTML: string;
   Headers: {
     [key: string]: string;
   };
-  ReplyTo: EmailAddress[];
+  ReplyTo: Email[];
   Subject: string;
   Tags: string[];
   Text: string;
-  To: EmailAddress[];
+  To: Email[];
 }
 
 export interface MailpitSendMessageConfirmationResponse {
@@ -219,36 +228,47 @@ export interface ChaosTriggersResponse {
   Sender?: ChaosTrigger;
 }
 
+interface AttachmentResponse {
+  data: ArrayBuffer;
+  contentType: string;
+}
+
 export class MailpitClient {
   private axiosInstance: AxiosInstance;
 
-  constructor(baseURL: string, username?: string, password?: string) {
+  constructor(baseURL: string, auth?: { username: string; password: string }) {
     this.axiosInstance = axios.create({
-      baseURL: baseURL,
+      baseURL,
+      auth,
       validateStatus: function (status) {
         return status === 200;
       },
-      auth: (username && password) ? {
-        username,
-        password
-      } : undefined
     });
   }
 
   private async handleRequest<T>(
-    request: () => Promise<{ data: T }>,
-  ): Promise<T> {
+    request: () => Promise<AxiosResponse<T>>,
+    options: { fullResponse: true },
+  ): Promise<AxiosResponse<T>>;
+  private async handleRequest<T>(
+    request: () => Promise<AxiosResponse<T>>,
+    options?: { fullResponse?: false },
+  ): Promise<T>;
+  private async handleRequest<T>(
+    request: () => Promise<AxiosResponse<T>>,
+    options: { fullResponse?: boolean } = { fullResponse: false },
+  ): Promise<T | AxiosResponse<T>> {
     try {
       const response = await request();
-      return response.data;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
+      return options.fullResponse ? response : response.data;
+    } catch (error: unknown) {
+      if (isAxiosError(error)) {
         const url = error.config?.url || "UNKNOWN URL";
         const method = error.config?.method?.toUpperCase() || "UNKNOWN METHOD";
         if (error.response) {
           // Server responded with a status other than 2xx
           throw new Error(
-            `Mailpit API Error: ${error.response.status} ${error.response.statusText} at ${method} ${url}: ${JSON.stringify(error.response.data)}`,
+            `Mailpit API Error: ${error.response.status.toString()} ${error.response.statusText} at ${method} ${url}: ${JSON.stringify(error.response.data)}`,
           );
         } else if (error.request) {
           // Request was made but no response was received
@@ -258,24 +278,24 @@ export class MailpitClient {
         } else {
           // Something happened in setting up the request
           throw new Error(
-            `Mailpit API Error: ${error.message} at ${method} ${url}`,
+            `Mailpit API Error: ${(error as Error).toString()} at ${method} ${url}`,
           );
         }
       } else {
-        throw new Error("Unexpected Error: " + error);
+        throw new Error(`Unexpected Error: ${error as Error}`);
       }
     }
   }
 
   // Application
   public async getInfo(): Promise<MailpitInfoResponse> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.get<MailpitInfoResponse>("/api/v1/info"),
     );
   }
 
   public async getConfiguration(): Promise<MailpitConfigurationResponse> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.get<MailpitConfigurationResponse>("/api/v1/webui"),
     );
   }
@@ -284,7 +304,7 @@ export class MailpitClient {
   public async getMessageSummary(
     id: string = "latest",
   ): Promise<MailpitMessageSummaryResponse> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.get<MailpitMessageSummaryResponse>(
         `/api/v1/message/${id}`,
       ),
@@ -294,7 +314,7 @@ export class MailpitClient {
   public async getMessageHeaders(
     id: string = "latest",
   ): Promise<MailpitMessageHeadersResponse> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.get<MailpitMessageHeadersResponse>(
         `/api/v1/message/${id}/headers`,
       ),
@@ -304,14 +324,23 @@ export class MailpitClient {
   public async getMessageAttachment(
     id: string,
     partID: string,
-  ): Promise<string> {
-    return this.handleRequest(() =>
-      this.axiosInstance.get<string>(`/api/v1/message/${id}/part/${partID}`),
+  ): Promise<AttachmentResponse> {
+    const response = await this.handleRequest(
+      () =>
+        this.axiosInstance.get<ArrayBuffer>(
+          `/api/v1/message/${id}/part/${partID}`,
+          { responseType: "arraybuffer" },
+        ),
+      { fullResponse: true },
     );
+    return {
+      data: response.data,
+      contentType: response.headers["content-type"] as string,
+    };
   }
 
   public async getMessageSource(id: string = "latest"): Promise<string> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.get<string>(`/api/v1/message/${id}/raw`),
     );
   }
@@ -319,19 +348,28 @@ export class MailpitClient {
   public async getAttachmentThumbnail(
     id: string,
     partID: string,
-  ): Promise<string> {
-    return this.handleRequest(() =>
-      this.axiosInstance.get<string>(
-        `/api/v1/message/${id}/part/${partID}/thumb`,
-      ),
+  ): Promise<AttachmentResponse> {
+    const response = await this.handleRequest(
+      () =>
+        this.axiosInstance.get<ArrayBuffer>(
+          `/api/v1/message/${id}/part/${partID}/thumb`,
+          {
+            responseType: "arraybuffer",
+          },
+        ),
+      { fullResponse: true },
     );
+    return {
+      data: response.data,
+      contentType: response.headers["content-type"] as string,
+    };
   }
 
   public async releaseMessage(
     id: string,
     releaseRequest: { To: string[] },
   ): Promise<string> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.post<string>(
         `/api/v1/message/${id}/release`,
         releaseRequest,
@@ -342,7 +380,7 @@ export class MailpitClient {
   public async sendMessage(
     sendReqest: MailpitSendRequest,
   ): Promise<MailpitSendMessageConfirmationResponse> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.post<MailpitSendMessageConfirmationResponse>(
         `/api/v1/send`,
         sendReqest,
@@ -354,7 +392,7 @@ export class MailpitClient {
   public async htmlCheck(
     id: string = "latest",
   ): Promise<MailpitHTMLCheckResponse> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.get<MailpitHTMLCheckResponse>(
         `/api/v1/message/${id}/html-check`,
       ),
@@ -365,7 +403,7 @@ export class MailpitClient {
     id: string = "latest",
     follow: "true" | "false" = "false",
   ): Promise<MailpitLinkCheckResponse> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.get<MailpitLinkCheckResponse>(
         `/api/v1/message/${id}/link-check`,
         { params: { follow } },
@@ -376,7 +414,7 @@ export class MailpitClient {
   public async spamAssassinCheck(
     id: string = "latest",
   ): Promise<MailpitSpamAssassinResponse> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.get<MailpitSpamAssassinResponse>(
         `/api/v1/message/${id}/sa-check`,
       ),
@@ -388,7 +426,7 @@ export class MailpitClient {
     start: number = 0,
     limit: number = 50,
   ): Promise<MailpitMessagesSummaryResponse> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.get<MailpitMessagesSummaryResponse>(
         `/api/v1/messages`,
         { params: { start, limit } },
@@ -399,7 +437,7 @@ export class MailpitClient {
   public async setReadStatus(
     readStatus: MailpitReadStatusRequest,
   ): Promise<string> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.put<string>(`/api/v1/messages`, readStatus),
     );
   }
@@ -407,7 +445,7 @@ export class MailpitClient {
   public async deleteMessages(
     deleteRequest?: MailpitDeleteRequest,
   ): Promise<string> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.delete<string>(`/api/v1/messages`, {
         data: deleteRequest,
       }),
@@ -418,7 +456,7 @@ export class MailpitClient {
   public async searchMessages(
     search: MailpitSearchRequest,
   ): Promise<MailpitMessagesSummaryResponse> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.get<MailpitMessagesSummaryResponse>(`/api/v1/search`, {
         params: search,
       }),
@@ -429,27 +467,27 @@ export class MailpitClient {
   public async deleteMessagesBySearch(
     search: MailpitSearchDeleteRequest,
   ): Promise<string> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.delete<string>(`/api/v1/search`, { params: search }),
     );
   }
 
   // Tags
   public async getTags(): Promise<string[]> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.get<string[]>(`/api/v1/tags`),
     );
   }
 
   public async setTags(request: MailpitSetTagsRequest): Promise<string> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.put<string>(`/api/v1/tags`, request),
     );
   }
 
   public async renameTag(tag: string, newTagName: string): Promise<string> {
     const encodedTag = encodeURI(tag);
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.put<string>(`/api/v1/tags/${encodedTag}`, {
         Name: newTagName,
       }),
@@ -458,26 +496,26 @@ export class MailpitClient {
 
   public async deleteTag(tag: string): Promise<string> {
     const encodedTag = encodeURI(tag);
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.delete<string>(`/api/v1/tags/${encodedTag}`),
     );
   }
 
   // Testing
   public async renderMessageHTML(id: string = "latest"): Promise<string> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.get<string>(`/view/${id}.html`),
     );
   }
 
   public async renderMessageText(id: string = "latest"): Promise<string> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.get<string>(`/view/${id}.txt`),
     );
   }
 
   public async getChaosTriggers(): Promise<ChaosTriggersResponse> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.get<ChaosTriggersResponse>("/api/v1/chaos"),
     );
   }
@@ -485,7 +523,7 @@ export class MailpitClient {
   public async setChaosTriggers(
     triggers: ChaosTriggersRequest = {},
   ): Promise<ChaosTriggersResponse> {
-    return this.handleRequest(() =>
+    return await this.handleRequest(() =>
       this.axiosInstance.put<ChaosTriggersResponse>("/api/v1/chaos", triggers),
     );
   }
