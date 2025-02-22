@@ -360,8 +360,8 @@ export interface MailpitSpamAssassinResponse {
 }
 
 /** Request parameters for the {@link MailpitClient.setReadStatus | setReadStatus()} API. */
-export interface MailpitReadStatusRequest extends MailpitDatabaseIDsRequest{
-  /** 
+export interface MailpitReadStatusRequest extends MailpitDatabaseIDsRequest {
+  /**
    * Read status
    * @defaultValue false
    */
@@ -377,7 +377,9 @@ export interface MailpitSearchMessagesRequest extends MailpitSearchRequest {
 }
 
 /** Request parameters for the {@link MailpitClient.setTags | setTags()} API. */
-export interface MailpitSetTagsRequest extends MailpitDatabaseIDsRequest{
+export interface MailpitSetTagsRequest {
+  /** Array of message database IDs */
+  IDs: string[];
   /** Array of tag names to set */
   Tags?: string[];
 }
@@ -499,7 +501,7 @@ export class MailpitClient {
 
   /**
    * Retrieves information about the Mailpit instance.
-   * 
+   *
    * @returns Basic runtime information, message totals and latest release version.
    * @example
    * ```typescript
@@ -594,10 +596,10 @@ export class MailpitClient {
     };
   }
 
- /**
+  /**
    * Generates a cropped 180x120 JPEG thumbnail of an image attachment from a message.
    * Only image attachments are supported.
-   * @remarks 
+   * @remarks
    * If the image is smaller than 180x120 then the image is padded.
    * If the attachment is not an image then a blank image is returned.
    * @param id - Message database ID or "latest"
@@ -722,10 +724,10 @@ export class MailpitClient {
    * ```typescript
    * // Set all messages as unread
    * await mailpit.setReadStatus();
-   * 
+   *
    * // Set all messages as read
    * await mailpit.setReadStatus({ Read: true });
-   * 
+   *
    * // Set specific messages as read
    * await mailpit.setReadStatus({ IDs: ["1", "2", "3"], Read: true });
    * ```
@@ -747,7 +749,7 @@ export class MailpitClient {
    * ```typescript
    * // Delete all messages
    * await mailpit.deleteMessages();
-   * 
+   *
    * // Delete specific messages
    * await mailpit.deleteMessages({ IDs: ["1", "2", "3"] });
    */
@@ -760,7 +762,7 @@ export class MailpitClient {
       }),
     );
   }
- 
+
   /**
    * Retrieve messages matching a search, sorted by received date (descending).
    * @see {@link https://mailpit.axllent.org/docs/usage/search-filters/ | Search filters}
@@ -863,7 +865,6 @@ export class MailpitClient {
     );
   }
 
-
   /**
    * Retrieves a list of all the unique tags.
    * @returns All unique message tags
@@ -879,34 +880,44 @@ export class MailpitClient {
   }
 
   /**
-   * Sets tag(s) on message(s).
+   * Sets and removes tag(s) on message(s).
    * @remarks
    * This will overwrite any existing tags for selected message database IDs.
    * To remove all tags from a message, pass an empty `Tags` array or exclude `Tags` entirely.
    * @param request - The request containing the message IDs and tags.
+   * @remarks
+   * Tags are limited to the following characters: `a-z`, `A-Z`, `0-9`, `-`, `.`, `spaces`, and `_`, and must be a minimum of 1 character.
+   * Other characters are silently stripped from the tag.
    * @returns Plain text "ok" response
    * @example
    * ```typescript
-   * // Set tags on messages
+   * // Set tags on message(s)
    * await mailpit.setTags({ IDs: ["1", "2", "3"], Tags: ["tag1", "tag2"] });
-   * // Remove tags from messages
+   * // Remove tags from message(s)
    * await mailpit.setTags({ IDs: ["1", "2", "3"]});
-   * 
+   * ```
    */
-  public async setTags(request: MailpitSetTagsRequest = {}): Promise<string> {
+  public async setTags(request: MailpitSetTagsRequest): Promise<string> {
     return await this.handleRequest(() =>
       this.axiosInstance.put<string>(`/api/v1/tags`, request),
     );
   }
 
   /**
-   * Renames a tag.
+   * Renames an existing tag.
    * @param tag - The current name of the tag.
-   * @param newTagName - The new name of the tag.
-   * @returns A promise that resolves to a string.
+   * @param newTagName - A new name for the tag.
+   * @remarks
+   * Tags are limited to the following characters: `a-z`, `A-Z`, `0-9`, `-`, `.`, `spaces`, and `_`, and must be a minimum of 1 character.
+   * Other characters are silently stripped from the tag.
+   * @returns Plain text "ok" response
+   * @example
+   * ```typescript
+   * await mailpit.renameTag("Old Tag Name", "New Tag Name");
+   * ```
    */
   public async renameTag(tag: string, newTagName: string): Promise<string> {
-    const encodedTag = encodeURI(tag);
+    const encodedTag = encodeURIComponent(tag);
     return await this.handleRequest(() =>
       this.axiosInstance.put<string>(`/api/v1/tags/${encodedTag}`, {
         Name: newTagName,
@@ -915,22 +926,77 @@ export class MailpitClient {
   }
 
   /**
-   * Deletes a tag.
+   * Deletes a tag from all messages.
    * @param tag - The name of the tag to delete.
-   * @returns A promise that resolves to a string.
+   * @remarks This does NOT delete any messages
+   * @returns Plain text "ok" response
+   * ```typescript
+   * await mailpit.deleteTag("Tag 1");
+   * ```
    */
   public async deleteTag(tag: string): Promise<string> {
-    const encodedTag = encodeURI(tag);
+    const encodedTag = encodeURIComponent(tag);
     return await this.handleRequest(() =>
       this.axiosInstance.delete<string>(`/api/v1/tags/${encodedTag}`),
     );
   }
 
   /**
-   * Renders the HTML view of a specific message.
+   * Retrieves the current Chaos triggers configuration (if enabled).
+   * @remarks This will return an error if Chaos is not enabled at runtime.
+   * @returns The Chaos triggers configuration
+   * @example
+   * ```typescript
+   * const triggers = await mailpit.getChaosTriggers();
+   * ```
+   */
+  public async getChaosTriggers(): Promise<MailpitChaosTriggersResponse> {
+    return await this.handleRequest(() =>
+      this.axiosInstance.get<MailpitChaosTriggersResponse>("/api/v1/chaos"),
+    );
+  }
+
+  /**
+   * Sets and/or resets the Chaos triggers configuration (if enabled).
+   * @param triggers - The request containing the chaos triggers. Omitted triggers will reset to the default `0%` probabibility.
+   * @remarks This will return an error if Chaos is not enabled at runtime.
+   * @returns The updated Chaos triggers configuration
+   *  @example
+   * ```typescript
+   * // Reset all triggers to `0%` probability
+   * const triggers = await mailpit.setChaosTriggers();
+   * // Set `Sender` and reset `Authentication` and `Recipient` triggers
+   * const triggers = await mailpit.setChaosTriggers({ Sender: { ErrorCode: 451, Probability: 5 } });
+   * ```
+   */
+  public async setChaosTriggers(
+    triggers: MailpitChaosTriggersRequest = {},
+  ): Promise<MailpitChaosTriggersResponse> {
+    return await this.handleRequest(() =>
+      this.axiosInstance.put<MailpitChaosTriggersResponse>(
+        "/api/v1/chaos",
+        triggers,
+      ),
+    );
+  }
+
+  /**
+   * Renders the HTML part of a specific message which can be used for UI integration testing.
+   * @remarks
+   * Attached inline images are modified to link to the API provided they exist.
+   * If the message does not contain an HTML part then a 404 error is returned.
+   *
+   *
    * @param id - The message database ID. Defaults to `latest` to return the latest message.
-   * @param embed - Whether to embed images. Defaults to undefined.
-   * @returns A promise that resolves to a string containing the HTML view.
+   * @param embed - Whether this route is to be embedded in an iframe. Defaults to `undefined`. Set to `1` to embed.
+   * The `embed` parameter will add `target="_blank"` and `rel="noreferrer noopener"` to all links.
+   * In addition, a small script will be added to the end of the document to post (postMessage()) the height of the document back to the parent window for optional iframe height resizing.
+   * Note that this will also transform the message into a full HTML document (if it isn't already), so this option is useful for viewing but not programmatic testing.
+   * @returns Rendered HTML
+   * @example
+   * ```typescript
+   * const html = await mailpit.renderMessageHTML();
+   * ```
    */
   public async renderMessageHTML(
     id: string = "latest",
@@ -942,39 +1008,17 @@ export class MailpitClient {
   }
 
   /**
-   * Renders the text view of a specific message.
+   * Renders just the message's text part which can be used for UI integration testing.
    * @param id - The message database ID. Defaults to `latest` to return the latest message.
-   * @returns A promise that resolves to a string containing the text view.
+   * @returns Plain text
+   * @example
+   * ```typescript
+   * const html = await mailpit.renderMessageText();
+   * ```
    */
   public async renderMessageText(id: string = "latest"): Promise<string> {
     return await this.handleRequest(() =>
       this.axiosInstance.get<string>(`/view/${id}.txt`),
-    );
-  }
-
-  /**
-   * Retrieves the chaos triggers.
-   * @returns A promise that resolves to a ChaosTriggersResponse.
-   */
-  public async getChaosTriggers(): Promise<MailpitChaosTriggersResponse> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.get<MailpitChaosTriggersResponse>("/api/v1/chaos"),
-    );
-  }
-
-  /**
-   * Sets the chaos triggers.
-   * @param triggers - The request containing the chaos triggers.
-   * @returns A promise that resolves to a ChaosTriggersResponse.
-   */
-  public async setChaosTriggers(
-    triggers: MailpitChaosTriggersRequest = {},
-  ): Promise<MailpitChaosTriggersResponse> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.put<MailpitChaosTriggersResponse>(
-        "/api/v1/chaos",
-        triggers,
-      ),
     );
   }
 }
