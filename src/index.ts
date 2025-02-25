@@ -6,7 +6,7 @@ import axios, {
 
 // COMMON TYPES
 /** Represents a name and email address for a request. */
-interface MailpitEmailAddressRequest {
+export interface MailpitEmailAddressRequest {
   /** Email address */
   Email: string;
   /** Optional name associated with the email address */
@@ -14,7 +14,7 @@ interface MailpitEmailAddressRequest {
 }
 
 /** Represents a name and email address from a response. */
-interface MailpitEmailAddressResponse {
+export interface MailpitEmailAddressResponse {
   /** Email address */
   Address: string;
   /** Name associated with the email address */
@@ -22,7 +22,7 @@ interface MailpitEmailAddressResponse {
 }
 
 /** Represents an attachment for a request. */
-interface MailpitAttachmentRequest {
+export interface MailpitAttachmentRequest {
   /** Base64-encoded string for the file content */
   Content: string;
   /** Optional Content-ID (cid) for attachment. If this field is set then the file is attached inline. */
@@ -34,7 +34,7 @@ interface MailpitAttachmentRequest {
 }
 
 /** Represents an attachment from a response. */
-interface MailpitAttachmentResponse {
+export interface MailpitAttachmentResponse {
   /** Content ID */
   ContentID: string;
   /** Content type */
@@ -48,7 +48,7 @@ interface MailpitAttachmentResponse {
 }
 
 /** Represents information about a Chaos trigger */
-interface MailpitChaosTrigger {
+export interface MailpitChaosTrigger {
   /** SMTP error code to return. The value must range from 400 to 599. */
   ErrorCode: number;
   /** Probability (chance) of triggering the error. The value must range from 0 to 100. */
@@ -405,7 +405,7 @@ export interface MailpitChaosTriggersResponse {
 }
 
 /** Response for the {@link MailpitClient.getMessageAttachment |getMessageAttachment()} and {@link MailpitClient.getAttachmentThumbnail | getAttachmentThumbnail()} APIs containing attachment data */
-interface MailpitAttachmentDataResponse {
+export interface MailpitAttachmentDataResponse {
   /** The attachment binary data */
   data: ArrayBuffer;
   /** The attachment MIME type */
@@ -440,6 +440,7 @@ export class MailpitClient {
    *  username: "admin",
    *  password: "supersecret",
    * });
+   * ```
    */
   constructor(baseURL: string, auth?: { username: string; password: string }) {
     this.axiosInstance = axios.create({
@@ -518,6 +519,10 @@ export class MailpitClient {
    * Retrieves the configuration of the Mailpit web UI.
    * @remarks Intended for web UI only!
    * @returns Configuration settings
+   * @example
+   * ```typescript
+   * const config = await mailpit.getConfiguration();
+   * ```
    */
   public async getConfiguration(): Promise<MailpitConfigurationResponse> {
     return await this.handleRequest(() =>
@@ -551,7 +556,7 @@ export class MailpitClient {
    * @returns Message headers
    * @example
    * ```typescript
-   *  const headers = await mailpit.getMessageHeaders();
+   * const headers = await mailpit.getMessageHeaders();
    * ```
    */
   public async getMessageHeaders(
@@ -658,16 +663,14 @@ export class MailpitClient {
    * @example
    * ```typescript
    * const message = await mailpit.releaseMessage("latest", ["user1@example.test", "user2@example.test"]);
+   * ```
    */
   public async releaseMessage(
     id: string,
-    releaseRequest: { To: string[] },
+    relayTo: { To: string[] },
   ): Promise<string> {
     return await this.handleRequest(() =>
-      this.axiosInstance.post<string>(
-        `/api/v1/message/${id}/release`,
-        releaseRequest,
-      ),
+      this.axiosInstance.post<string>(`/api/v1/message/${id}/release`, relayTo),
     );
   }
 
@@ -682,6 +685,7 @@ export class MailpitClient {
    *  To: [{ Email: "rec@example.test", Name: "Recipient Name"}, {Email: "another@example.test"}],
    *  Subject: "Test Email",
    * );
+   * ```
    */
   public async sendMessage(
     sendReqest: MailpitSendRequest,
@@ -701,6 +705,10 @@ export class MailpitClient {
    * @param start - The pagination offset. Defaults to `0`.
    * @param limit - The number of messages to retrieve. Defaults to `50`.
    * @returns A list of message summaries
+   * @example
+   * ```typescript
+   * const messages = await.listMessages();
+   * ```
    */
   public async listMessages(
     start: number = 0,
@@ -752,6 +760,7 @@ export class MailpitClient {
    *
    * // Delete specific messages
    * await mailpit.deleteMessages({ IDs: ["1", "2", "3"] });
+   * ```
    */
   public async deleteMessages(
     deleteRequest?: MailpitDatabaseIDsRequest,
@@ -880,11 +889,8 @@ export class MailpitClient {
   }
 
   /**
-   * Sets and removes tag(s) on message(s).
-   * @remarks
-   * This will overwrite any existing tags for selected message database IDs.
-   * To remove all tags from a message, pass an empty `Tags` array or exclude `Tags` entirely.
-   * @param request - The request containing the message IDs and tags.
+   * Sets and removes tag(s) on message(s). This will overwrite any existing tags for selected message database IDs.
+   * @param request - The request containing the message IDs and tags. To remove all tags from a message, pass an empty `Tags` array or exclude `Tags` entirely.
    * @remarks
    * Tags are limited to the following characters: `a-z`, `A-Z`, `0-9`, `-`, `.`, `spaces`, and `_`, and must be a minimum of 1 character.
    * Other characters are silently stripped from the tag.
