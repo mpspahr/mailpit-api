@@ -1,6 +1,6 @@
 {
   "name": "mailpit-api",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "A NodeJS client library, written in TypeScript, to interact with the Mailpit API.",
   "repository": {
     "type": "git",
