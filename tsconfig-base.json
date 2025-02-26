@@ -20,6 +20,6 @@
     "types": ["node", "jest"]
   },
   "compileOnSave": false,
-  "exclude": ["node_modules", "dist", "test"],
+  "exclude": ["node_modules", "dist", "test", "docs"],
   "include": ["src"]
 }

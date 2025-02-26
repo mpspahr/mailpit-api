@@ -1,5 +1,11 @@
 {
   "plugin": ["typedoc-plugin-markdown"],
   "out": "./docs",
-  "mergeReadme": true
+  "indexFormat": "table",
+  "parametersFormat": "table",
+  "interfacePropertiesFormat": "table",
+  "classPropertiesFormat": "table",
+  "enumMembersFormat": "table",
+  "propertyMembersFormat": "table",
+  "typeDeclarationFormat": "table"
 }
