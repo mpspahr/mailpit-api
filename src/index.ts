@@ -409,7 +409,7 @@ export interface MailpitAttachmentDataResponse {
   /** The attachment binary data */
   data: ArrayBuffer;
   /** The attachment MIME type */
-  type: string;
+  contentType: string;
 }
 
 /**
@@ -597,7 +597,7 @@ export class MailpitClient {
     );
     return {
       data: response.data,
-      type: response.headers["content-type"] as string,
+      contentType: response.headers["content-type"] as string,
     };
   }
 
@@ -635,7 +635,7 @@ export class MailpitClient {
     );
     return {
       data: response.data,
-      type: response.headers["content-type"] as string,
+      contentType: response.headers["content-type"] as string,
     };
   }
 
