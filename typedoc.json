@@ -1,0 +1,11 @@
+{
+  "plugin": ["typedoc-plugin-markdown", "typedoc-github-wiki-theme"],
+  "out": "./docs",
+  "indexFormat": "table",
+  "parametersFormat": "table",
+  "interfacePropertiesFormat": "table",
+  "classPropertiesFormat": "table",
+  "enumMembersFormat": "table",
+  "propertyMembersFormat": "table",
+  "typeDeclarationFormat": "table"
+}

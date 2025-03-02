@@ -1,6 +1,6 @@
 {
   "name": "mailpit-api",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "A NodeJS client library, written in TypeScript, to interact with the Mailpit API.",
   "repository": {
     "type": "git",
@@ -18,7 +18,8 @@
     "test": "echo \"TODO: Add tests\" && exit 0",
     "build": "rm -fr dist/* && tsc -p tsconfig.json && tsc -p tsconfig-cjs.json && ./fixup_type",
     "pretty": "npx prettier . --write",
-    "lint": "npx eslint --fix src"
+    "lint": "npx eslint --fix src",
+    "docs": "typedoc --readme none"
   },
   "keywords": [
     "mailpit-api",
@@ -34,17 +35,20 @@
   "author": "Matthew Spahr",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.7.9"
+    "axios": "^1.8.1"
   },
   "devDependencies": {
-    "@eslint/js": "^8.57.1",
-    "@types/eslint__js": "^8.42.3",
+    "@eslint/js": "^9.21.0",
+    "@types/eslint__js": "^8.25.0",
     "@types/node": "^20.14.15",
-    "eslint": "^9.20.1",
+    "eslint": "^9.21.0",
     "jest": "^29.7.0",
-    "prettier": "3.4.2",
+    "prettier": "3.5.2",
     "tsx": "^4.19.3",
+    "typedoc": "^0.27.9",
+    "typedoc-github-wiki-theme": "^2.1.0",
+    "typedoc-plugin-markdown": "^4.4.2",
     "typescript": "^5.7.3",
-    "typescript-eslint": "^8.24.0"
+    "typescript-eslint": "^8.25.0"
   }
 }
