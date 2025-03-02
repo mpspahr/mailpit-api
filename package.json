@@ -46,6 +46,7 @@
     "prettier": "3.5.2",
     "tsx": "^4.19.3",
     "typedoc": "^0.27.9",
+    "typedoc-github-wiki-theme": "^2.1.0",
     "typedoc-plugin-markdown": "^4.4.2",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.25.0"

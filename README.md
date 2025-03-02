@@ -28,4 +28,4 @@ const messages = await mailpit.listMessages();
 await mailpit.deleteMessages();
 ```
 
-## [Documentation](https://github.com/mpspahr/mailpit-api/docs/README.md)
+## [Documentation](https://github.com/mpspahr/mailpit-api/wiki/)

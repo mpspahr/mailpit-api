@@ -131,3 +131,6 @@ dist
 
 # Testing
 test/
+
+# Documentation
+docs/
