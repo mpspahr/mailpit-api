@@ -56,9 +56,13 @@ export interface MailpitChaosTrigger {
 }
 
 /** Common request parameters for APIs with a search query */
-export interface MailpitSearchRequest {
+export interface MailpitSearchRequest extends MailpitTimeZoneRequest {
   /** {@link https://mailpit.axllent.org/docs/usage/search-filters/ | Search query} */
   query: string;
+}
+
+/** Common request parameters for APIs with a search query and time zone option */
+export interface MailpitTimeZoneRequest {
   /** {@link https://en.wikipedia.org/wiki/List_of_tz_database_time_zones | Timezone identifier} used only for `before:` & `after:` searches (eg: "Pacific/Auckland"). */
   tz?: string;
 }
@@ -205,6 +209,8 @@ export interface MailpitMessagesSummaryResponse {
   }[];
   /** Total number of messages matching the current query */
   messages_count: number;
+  /** Total number of unread messages matching current query */
+  messages_unread: number;
   /** Pagination offset */
   start: number;
   /** All current tags */
@@ -366,6 +372,8 @@ export interface MailpitReadStatusRequest extends MailpitDatabaseIDsRequest {
    * @defaultValue false
    */
   Read?: boolean;
+  /** {@link https://mailpit.axllent.org/docs/usage/search-filters/ | Search filter} */
+  Search?: string;
 }
 
 /** Request parameters for the {@link MailpitClient.searchMessages | searchMessages()} API. */
@@ -724,9 +732,13 @@ export class MailpitClient {
 
   /**
    * Set the read status of messages.
-   * @param readStatus - The request containing the message database IDs and read status.
+   * @remarks You can optionally provide an array of `IDs` **OR** a `Search` filter. If neither is  set then all messages are updated.
+   * @param readStatus - The request containing the message database IDs/search string and the read status.
    * @param readStatus.Read - The read status to set. Defaults to `false`.
-   * @param readStatus.IDs - The IDs of the messages to update. If not set then all messages are updated.
+   * @param readStatus.IDs - The optional IDs of the messages to update.
+   * @param readStatus.Search - The optional search string to filter messages.
+   * @param params - Optional parameters for defining the time zone when using the `before:` and `after:` search filters.
+   * @see {@link https://mailpit.axllent.org/docs/usage/search-filters/ | Search filters}
    * @returns Plain text "ok" response
    * @example
    * ```typescript
@@ -736,15 +748,24 @@ export class MailpitClient {
    * // Set all messages as read
    * await mailpit.setReadStatus({ Read: true });
    *
-   * // Set specific messages as read
+   * // Set specific messages as read using IDs
    * await mailpit.setReadStatus({ IDs: ["1", "2", "3"], Read: true });
+   *
+   * // Set specific messages as read using search
+   * await mailpit.setReadStatus({ Search: "from:example.test", Read: true });
+   *
+   * // Set specific messages as read using after: search with time zone
+   * await mailpit.setReadStatus({ Search: "after:2025-04-30", Read: true }, { tz: "America/Chicago" });
    * ```
    */
   public async setReadStatus(
     readStatus: MailpitReadStatusRequest,
+    params?: MailpitTimeZoneRequest,
   ): Promise<string> {
     return await this.handleRequest(() =>
-      this.axiosInstance.put<string>(`/api/v1/messages`, readStatus),
+      this.axiosInstance.put<string>(`/api/v1/messages`, readStatus, {
+        params,
+      }),
     );
   }
 
