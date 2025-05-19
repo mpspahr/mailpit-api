@@ -156,6 +156,17 @@ export interface MailpitMessageSummaryResponse {
   ID: string;
   /** Inline message attachements */
   Inline: MailpitEmailAddressResponse[];
+  /** ListUnsubscribe contains a summary of List-Unsubscribe & List-Unsubscribe-Post headers including validation of the link structure */
+  ListUnsubscribe: {
+    /** Validation errors (if any) */
+    Errors: string;
+    /** List-Unsubscrobe header value */
+    Header: string;
+    /** List-Unsubscribe-Post valie (if set) */
+    HeaderPost: string;
+    /** Detected links, maximum one email and one HTTP(S) link  */
+    Links: string[];
+  };
   /** Message ID */
   MessageID: string;
   /** ReplyTo addresses */
