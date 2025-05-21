@@ -1,6 +1,13 @@
+# Ignore development, test, and config files not needed in the npm package
 node_modules
 .prettierignore
 .prettierrc
 eslint.config.mjs
 .github/
-fixup_type
+.gitignore
+.npmignore
+.vscode/
+test/
+tsconfig.json
+typedoc.json
+src/
