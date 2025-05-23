@@ -1,11 +1,6 @@
 {
-  "plugin": ["typedoc-plugin-markdown", "typedoc-github-wiki-theme"],
+  "plugin": ["typedoc-github-theme"],
   "out": "./docs",
-  "indexFormat": "table",
-  "parametersFormat": "table",
-  "interfacePropertiesFormat": "table",
-  "classPropertiesFormat": "table",
-  "enumMembersFormat": "table",
-  "propertyMembersFormat": "table",
-  "typeDeclarationFormat": "table"
+  "entryPoints": ["./src/index.ts"],
+  "includeVersion": true
 }
