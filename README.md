@@ -4,6 +4,7 @@ A NodeJS client library, written in TypeScript, to interact with the Mailpit API
 
 [![npm version](https://img.shields.io/npm/v/mailpit-api.svg)](https://www.npmjs.com/package/mailpit-api)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
+[![Documentation](https://img.shields.io/badge/Docs-Available-blue.svg)](https://mpspahr.github.io/mailpit-api/)
 
 This package provides a convenient way to interact with [Mailpit](https://github.com/axllent/mailpit) from your NodeJS applications.
 
@@ -30,4 +31,4 @@ await mailpit.deleteMessages();
 
 ## Documentation
 
-[mailpit-api wiki](https://github.com/mpspahr/mailpit-api/wiki/)
+[View the Full Documentation](https://mpspahr.github.io/mailpit-api/)
