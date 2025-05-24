@@ -441,7 +441,7 @@ export interface MailpitAttachmentDataResponse {
  * ```
  */
 export class MailpitClient {
-  private axiosInstance: AxiosInstance;
+  private readonly axiosInstance: AxiosInstance;
 
   /**
    * Creates an instance of {@link MailpitClient}.
