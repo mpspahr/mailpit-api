@@ -118,6 +118,8 @@ export interface MailpitConfigurationResponse {
   ChaosEnabled: boolean;
   /** Whether messages with duplicate IDs are ignored */
   DuplicatesIgnored: boolean;
+  /** Whether the delete button should be hidden */
+  HideDeleteAllButton: boolean;
   /** Label to identify this Mailpit instance */
   Label: string;
   MessageRelay: {
@@ -129,6 +131,8 @@ export interface MailpitConfigurationResponse {
     Enabled: boolean;
     /** Overrides the "From" address for all relayed messages */
     OverrideFrom: string;
+    /** @deprecated see `AllowedRecipients` instead */
+    RecipientAllowlist: string;
     /** Enforced Return-Path (if set) for relay bounces */
     ReturnPath: string;
     /** The configured SMTP server address */
