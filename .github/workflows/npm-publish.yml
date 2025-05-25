@@ -12,7 +12,7 @@ permissions:
   id-token: write
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,10 +20,11 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
-      - run: npm test
+      - run: npm run test
+      - run: npm run test:e2e
 
-  publish-npm:
-    needs: build
+  publish:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
