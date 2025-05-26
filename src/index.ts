@@ -131,7 +131,7 @@ export interface MailpitConfigurationResponse {
     Enabled: boolean;
     /** Overrides the "From" address for all relayed messages */
     OverrideFrom: string;
-    /** @deprecated see `AllowedRecipients` instead */
+    /** @deprecated Refer to `AllowedRecipients` instead. No longer documented upstream */
     RecipientAllowlist: string;
     /** Enforced Return-Path (if set) for relay bounces */
     ReturnPath: string;
@@ -159,7 +159,7 @@ export interface MailpitMessageSummaryResponse {
   /** Database ID */
   ID: string;
   /** Inline message attachements */
-  Inline: MailpitEmailAddressResponse[];
+  Inline: MailpitAttachmentResponse[];
   /** ListUnsubscribe contains a summary of List-Unsubscribe & List-Unsubscribe-Post headers including validation of the link structure */
   ListUnsubscribe: {
     /** Validation errors (if any) */
@@ -234,6 +234,8 @@ export interface MailpitMessagesSummaryResponse {
   total: number;
   /** Total number of unread messages in mailbox */
   unread: number;
+  /** @deprecated No longer documented upstream */
+  count: number;
 }
 
 /** Response for the {@link MailpitClient.getMessageHeaders | getMessageHeaders()} API containing message headers */
@@ -430,7 +432,7 @@ export interface MailpitChaosTriggersResponse {
 /** Response for the {@link MailpitClient.getMessageAttachment |getMessageAttachment()} and {@link MailpitClient.getAttachmentThumbnail | getAttachmentThumbnail()} APIs containing attachment data */
 export interface MailpitAttachmentDataResponse {
   /** The attachment binary data */
-  data: ArrayBuffer;
+  data: ArrayBuffer | Buffer;
   /** The attachment MIME type */
   contentType: string;
 }
