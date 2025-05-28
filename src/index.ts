@@ -883,7 +883,7 @@ export class MailpitClient {
    */
   public async linkCheck(
     id: string = "latest",
-    follow: "true" | "false" = "false",
+    follow: boolean = false,
   ): Promise<MailpitLinkCheckResponse> {
     return await this.handleRequest(() =>
       this.axiosInstance.get<MailpitLinkCheckResponse>(

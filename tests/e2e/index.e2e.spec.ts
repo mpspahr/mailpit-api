@@ -1,10 +1,20 @@
 import * as fs from "fs";
 import path from "path";
-import { describe, test, expect, beforeEach, afterAll } from "@jest/globals";
+import {
+  describe,
+  test,
+  expect,
+  jest,
+  afterAll,
+  afterEach,
+} from "@jest/globals";
 import { MailpitClient, type MailpitSendRequest } from "../../src/index";
 import dotenv from "dotenv";
 
 dotenv.config();
+
+// TODO: Shouldn't be needed
+jest.setTimeout(30000);
 
 describe("MailpitClient E2E Tests", () => {
   // Test email details
@@ -20,7 +30,8 @@ describe("MailpitClient E2E Tests", () => {
     Subject: "Test Email with Attachment",
     Text: "This is a test email with an attachment.",
     HTML: `<div style="text-align:center"><p>Mailpit is <b>awesome</b>!</p>
-      <p>This is a test email with an inline image: <img src="cid:test-image" /></p></div>`,
+      <p>This is a test email with an inline image: <img src="cid:test-image" /></p></div>
+      <p><a href="https://example.test">Example Link</a></p>`,
     Headers: {
       "List-Unsubscribe":
         "<mailto:unsubscribe@example.test>, <https://example.test/unsubscribe>",
@@ -72,31 +83,21 @@ describe("MailpitClient E2E Tests", () => {
         Size: expect.any(Number),
         Snippet: expect.any(String),
         Subject: expect.any(String),
-        Tags: expect.any(Array),
+        Tags: expect.any(Array<string>),
         To: [address],
       },
     ]),
     messages_count: expect.any(Number),
     messages_unread: expect.any(Number),
     start: expect.any(Number),
-    tags: expect.any(Array),
+    tags: expect.any(Array<string>),
     total: expect.any(Number),
     unread: expect.any(Number),
     count: expect.any(Number), // depreated but stll returned
   };
 
-  // TODO: Make this an afterEach and move it to descrive for the two delete tests.
-  beforeEach(async () => {
-    if (!messageId) {
-      const response = await mailpit.sendMessage(sendRequest);
-      messageId = response.ID;
-    }
-  });
-
   afterAll(async () => {
-    if (!messageId) {
-      await mailpit.deleteMessages();
-    }
+    await mailpit.deleteMessages();
   });
 
   test("sendMessage() should send message", async () => {
@@ -172,14 +173,14 @@ describe("MailpitClient E2E Tests", () => {
         Errors: expect.any(String),
         Header: expect.any(String),
         HeaderPost: expect.any(String),
-        Links: expect.any(Array),
+        Links: expect.any(Array<string>),
       },
       MessageID: expect.any(String),
       ReplyTo: [address],
       ReturnPath: expect.any(String),
       Size: expect.any(Number),
       Subject: expect.any(String),
-      Tags: expect.any(Array),
+      Tags: expect.any(Array<string>),
       Text: expect.any(String),
       To: [address],
     });
@@ -205,6 +206,7 @@ describe("MailpitClient E2E Tests", () => {
     });
   });
 
+  // TODO: Change to test.each
   for (const method of ["getMessageAttachment", "getAttachementThumbnail"]) {
     test(`${method}() should return the attachment data and content type`, async () => {
       const attachment = await mailpit.getMessageAttachment(
@@ -233,7 +235,6 @@ describe("MailpitClient E2E Tests", () => {
     const releaseResponse = await mailpit.releaseMessage(messageId, {
       To: ["user1@example.test"],
     });
-    console.log(releaseResponse);
     expect(releaseResponse).toEqual({
       ID: messageId,
     });
@@ -252,12 +253,6 @@ describe("MailpitClient E2E Tests", () => {
     expect(response).toBe("ok");
   });
 
-  test("deleteMessages() should delete a message", async () => {
-    const response = await mailpit.deleteMessages({ IDs: [messageId] });
-    expect(response).toBe("ok");
-    messageId = ""; // Clear messageId after deletion
-  });
-
   test("searchMessages() should return messages matching the search criteria", async () => {
     const searchRequest = {
       query: `subject:${sendRequest.Subject as string}`,
@@ -268,19 +263,102 @@ describe("MailpitClient E2E Tests", () => {
     expect(response).toEqual(messages);
   });
 
-  test("deleteMessagesBySearch() should delete messages matching the search criteria", async () => {
-    const searchRequest = {
-      query: `subject:${sendRequest.Subject as string}`,
-    };
-    const response = await mailpit.deleteMessagesBySearch(searchRequest);
-    expect(response).toBe("ok");
-    messageId = ""; // Clear messageId after deletion
+  describe("Delete Methods", () => {
+    afterEach(async () => {
+      if (!messageId) {
+        const response = await mailpit.sendMessage(sendRequest);
+        messageId = response.ID;
+      }
+    });
+
+    test("deleteMessages() should delete a message", async () => {
+      const response = await mailpit.deleteMessages({ IDs: [messageId] });
+      expect(response).toBe("ok");
+      messageId = ""; // Clear messageId after deletion
+    });
+
+    test("deleteMessagesBySearch() should delete messages matching the search criteria", async () => {
+      const searchRequest = {
+        query: `subject:${sendRequest.Subject as string}`,
+      };
+      const response = await mailpit.deleteMessagesBySearch(searchRequest);
+      expect(response).toBe("ok");
+      messageId = ""; // Clear messageId after deletion
+    });
   });
 
-  // TODO: Add assertions for the response
-  test.skip("htmlCheck() should return HTML validation results for a message", async () => {
+  test("htmlCheck() should return HTML validation results for a message", async () => {
     const response = await mailpit.htmlCheck(messageId);
-    console.log(JSON.stringify(response, null, 2));
-    expect(response).toEqual({});
+    expect(response).toEqual({
+      Platforms: expect.any(Object),
+      Total: {
+        Nodes: expect.any(Number),
+        Partial: expect.any(Number),
+        Supported: expect.any(Number),
+        Tests: expect.any(Number),
+        Unsupported: expect.any(Number),
+      },
+      Warnings: expect.arrayContaining([
+        expect.objectContaining({
+          Category: expect.any(String),
+          Description: expect.any(String),
+          Keywords: expect.any(String),
+          NotesByNumber: expect.any(Object),
+          Results: expect.arrayContaining([
+            {
+              Family: expect.any(String),
+              Name: expect.any(String),
+              NoteNumber: expect.any(String),
+              Platform: expect.any(String),
+              Support: expect.any(String),
+              Version: expect.any(String),
+            },
+          ]),
+          Score: {
+            Found: expect.any(Number),
+            Partial: expect.any(Number),
+            Supported: expect.any(Number),
+            Unsupported: expect.any(Number),
+          },
+          Slug: expect.any(String),
+          Tags: expect.any(Array<string>),
+          Title: expect.any(String),
+          URL: expect.any(String),
+        }),
+      ]),
+    });
+  });
+
+  test("linkCheck() should return link checker results for a message", async () => {
+    const response = await mailpit.linkCheck(messageId, true);
+    expect(response).toEqual({
+      Errors: expect.any(Number),
+      Links: expect.arrayContaining([
+        expect.objectContaining({
+          Status: expect.any(String),
+          StatusCode: expect.any(Number),
+          URL: expect.any(String),
+        }),
+      ]),
+    });
+  });
+
+  // TODO Need to enable SpamAssassin in Mailpit configuration to test this
+  // Mailpit API Error: 404 Not Found at GET /api/v1/message/GFTRjifABrkwJnVYcKGQD2/sa-check: "File not found\n"
+  test.skip("spamAssassinCheck() should return SpamAssassin results for a message", async () => {
+    const response = await mailpit.spamAssassinCheck(messageId);
+    console.log(response);
+    expect(response).toEqual({
+      Errors: expect.any(Number),
+      IsSpam: expect.any(Boolean),
+      Rules: expect.arrayContaining([
+        expect.objectContaining({
+          Description: expect.any(String),
+          Name: expect.any(String),
+          Score: expect.any(Number),
+        }),
+      ]),
+      Score: expect.any(Number),
+    });
   });
 });
