@@ -8,7 +8,11 @@ import {
   afterAll,
   afterEach,
 } from "@jest/globals";
-import { MailpitClient, type MailpitSendRequest } from "../../src/index";
+import {
+  MailpitClient,
+  MailpitConfigurationResponse,
+  type MailpitSendRequest,
+} from "../../src/index";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -58,9 +62,10 @@ describe("MailpitClient E2E Tests", () => {
     },
   );
 
-  // Variables to hold message and attachment IDs
+  // Variables to hold config, message and attachment IDs
   let messageId: string;
   let attachmentId: string;
+  let config: MailpitConfigurationResponse;
 
   // Common structures
   const address = {
@@ -131,7 +136,7 @@ describe("MailpitClient E2E Tests", () => {
   });
 
   test("getConfiguration() should return configuration for the web UI", async () => {
-    const config = await mailpit.getConfiguration();
+    config = await mailpit.getConfiguration();
     expect(config).toEqual({
       ChaosEnabled: expect.any(Boolean),
       DuplicatesIgnored: expect.any(Boolean),
@@ -226,12 +231,17 @@ describe("MailpitClient E2E Tests", () => {
     expect(source).toEqual(expect.any(String));
   });
 
-  // TODO: Figure out how to test this without error.
-  // Also, use this for a error handling test
+  // TODO: Use this for a error handling test
   // Mailpit API Error: 400 Bad Request at POST /api/v1/message/J4oLNEwtPMTjk5WRusXVWY/release: "SMTP error: error connecting to :0: dial tcp :0: connect: connection refused"
   // Can also test 404 by includeing "" as messageId in htmlCheck()
   // Mailpit API Error: 404 Not Found at GET /api/v1/message//html-check: "404 page not found"
-  test.skip("releaseMessage() should release a messsage", async () => {
+  test("releaseMessage() should release a messsage", async () => {
+    if (!config.MessageRelay.Enabled) {
+      console.warn(
+        "Message relay is disabled, skipping releaseMessage() test.",
+      );
+      return;
+    }
     const releaseResponse = await mailpit.releaseMessage(messageId, {
       To: ["user1@example.test"],
     });
@@ -343,13 +353,17 @@ describe("MailpitClient E2E Tests", () => {
     });
   });
 
-  // TODO Need to enable SpamAssassin in Mailpit configuration to test this
-  // Mailpit API Error: 404 Not Found at GET /api/v1/message/GFTRjifABrkwJnVYcKGQD2/sa-check: "File not found\n"
-  test.skip("spamAssassinCheck() should return SpamAssassin results for a message", async () => {
+  test("spamAssassinCheck() should return SpamAssassin results for a message", async () => {
+    if (!config.SpamAssassin) {
+      console.warn(
+        "SpamAssassin is disabled, skipping spamAssassinCheck() test.",
+      );
+      return;
+    }
     const response = await mailpit.spamAssassinCheck(messageId);
     console.log(response);
     expect(response).toEqual({
-      Errors: expect.any(Number),
+      Error: expect.any(String),
       IsSpam: expect.any(Boolean),
       Rules: expect.arrayContaining([
         expect.objectContaining({
@@ -359,6 +373,35 @@ describe("MailpitClient E2E Tests", () => {
         }),
       ]),
       Score: expect.any(Number),
+    });
+  });
+
+  describe("Tagging Methods", () => {
+    let tagName: string;
+    afterAll(async () => {
+      if (tagName) {
+        await mailpit.deleteTag(tagName);
+      }
+    });
+    test("setTags() should set tags for a message", async () => {
+      const response = await mailpit.setTags({
+        IDs: [messageId],
+        Tags: ["test-tag"],
+      });
+      expect(response).toBe("ok");
+      tagName = "test-tag"; // Store tagName for subsequent tests
+    });
+
+    test("renameTag() should set tags for a message", async () => {
+      const response = await mailpit.renameTag(tagName, "renamed-tag");
+      expect(response).toBe("ok");
+      tagName = "renamed-tag"; // Update tagName for subsequent tests
+    });
+
+    test("deleteTag() should delete a tag", async () => {
+      const response = await mailpit.deleteTag(tagName);
+      expect(response).toBe("ok");
+      tagName = ""; // Clear tagName after deletion
     });
   });
 });

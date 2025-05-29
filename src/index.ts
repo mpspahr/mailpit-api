@@ -366,7 +366,7 @@ export interface MailpitLinkCheckResponse {
 /** Response from the {@link MailpitClient.spamAssassinCheck | spamAssassinCheck()} API containing containing SpamAssassin check results. */
 export interface MailpitSpamAssassinResponse {
   /** If populated will return an error string */
-  Errors: number;
+  Error: string;
   /** Whether the message is spam or not */
   IsSpam: boolean;
   /** Spam rules triggered */
