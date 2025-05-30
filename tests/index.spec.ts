@@ -262,7 +262,7 @@ describe("MailpitClient", () => {
     const result = await client.linkCheck("id", true);
     expect(mockedAxios.get).toHaveBeenCalledWith(
       "/api/v1/message/id/link-check",
-      { params: { follow: "true" } },
+      { params: { follow: true } },
     );
     expect(result).toEqual(mockData);
   });
