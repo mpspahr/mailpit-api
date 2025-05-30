@@ -259,7 +259,7 @@ describe("MailpitClient", () => {
   test("should call linkCheck and return link check response", async () => {
     const mockData = { Errors: 0, Links: [] };
     mockedAxios.get.mockResolvedValue({ data: mockData });
-    const result = await client.linkCheck("id", "true");
+    const result = await client.linkCheck("id", true);
     expect(mockedAxios.get).toHaveBeenCalledWith(
       "/api/v1/message/id/link-check",
       { params: { follow: "true" } },
