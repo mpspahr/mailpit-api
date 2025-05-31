@@ -40,6 +40,16 @@ describe("MailpitClient", () => {
     // Mock axios.create to return our mocked instance
     (axios.create as jest.Mock).mockReturnValue(mockedAxios);
 
+    // Mock isAxiosError function
+    (axios as any).isAxiosError = jest.fn().mockImplementation((error) => {
+      return (
+        error &&
+        typeof error === "object" &&
+        "name" in error &&
+        error.name === "AxiosError"
+      );
+    });
+
     client = new MailpitClient("http://localhost:8025");
   });
 
@@ -300,8 +310,116 @@ describe("MailpitClient", () => {
     expect(result).toBe("ok");
   });
 
-  test("should handle errors in handleRequest", async () => {
+  test("should call deleteTag and return ok", async () => {
+    mockedAxios.delete.mockResolvedValue({ data: "ok" });
+    const result = await client.deleteTag("tag");
+    expect(mockedAxios.delete).toHaveBeenCalledWith("/api/v1/tags/tag");
+    expect(result).toBe("ok");
+  });
+
+  test("should call getChaosTriggers and return triggers", async () => {
+    const mockData = {
+      Authentication: {
+        ErrorCode: 451,
+        Probability: 5,
+      },
+      Recipient: {
+        ErrorCode: 451,
+        Probability: 5,
+      },
+      Sender: {
+        ErrorCode: 451,
+        Probability: 5,
+      },
+    };
+    mockedAxios.get.mockResolvedValue({ data: mockData });
+    const result = await client.getChaosTriggers();
+    expect(mockedAxios.get).toHaveBeenCalledWith("/api/v1/chaos");
+    expect(result).toEqual(mockData);
+  });
+
+  test("should call setChaosTriggers and return ok", async () => {
+    const mockData = {
+      Authentication: {
+        ErrorCode: 451,
+        Probability: 5,
+      },
+      Recipient: {
+        ErrorCode: 451,
+        Probability: 5,
+      },
+      Sender: {
+        ErrorCode: 451,
+        Probability: 5,
+      },
+    };
+    mockedAxios.put.mockResolvedValue({ data: mockData });
+    const result = await client.setChaosTriggers(mockData);
+    expect(mockedAxios.put).toHaveBeenCalledWith("/api/v1/chaos", mockData);
+    expect(result).toEqual(mockData);
+  });
+
+  test("should call renderMessageHTML and return HTML", async () => {
+    const mockData = "<html>Rendered</html>";
+    mockedAxios.get.mockResolvedValue({ data: mockData });
+    const result = await client.renderMessageHTML("id", 1);
+    expect(mockedAxios.get).toHaveBeenCalledWith("/view/id.html", {
+      params: { embed: 1 },
+    });
+    expect(result).toBe(mockData);
+  });
+
+  test("should call renderMessageText and return text", async () => {
+    const mockData = "Rendered Text";
+    mockedAxios.get.mockResolvedValue({ data: mockData });
+    const result = await client.renderMessageText("id");
+    expect(mockedAxios.get).toHaveBeenCalledWith("/view/id.txt");
+    expect(result).toBe(mockData);
+  });
+
+  test("should handle NOT AxiosError", async () => {
     mockedAxios.get.mockRejectedValue({ response: { data: "error" } });
-    await expect(client.getInfo()).rejects.toBeDefined();
+    await expect(client.getInfo()).rejects.toThrow();
+  });
+
+  test("should handle AxiosError with response", async () => {
+    const error = {
+      name: "AxiosError",
+      message: "Response Error",
+      config: { url: "/api/v1/info", method: "GET" },
+      response: {
+        status: 500,
+        data: "Boom!",
+
+        statusText: "Internal Server Error",
+      },
+    };
+    mockedAxios.get.mockRejectedValue(error);
+    await expect(client.getInfo()).rejects.toThrow(
+      'Mailpit API Error: 500 Internal Server Error at GET /api/v1/info: "Boom!"',
+    );
+  });
+
+  test("should handle AxiosError with request", async () => {
+    const error = {
+      name: "AxiosError",
+      config: { url: "/api/v1/info", method: "GET" },
+      request: {},
+    };
+    mockedAxios.get.mockRejectedValue(error);
+    await expect(client.getInfo()).rejects.toThrow(
+      "Mailpit API Error: No response received from server at GET /api/v1/info",
+    );
+  });
+
+  test("should handle AxiosError with neither request nor response", async () => {
+    const error = {
+      name: "AxiosError",
+      message: "Something Other Error",
+    };
+    mockedAxios.get.mockRejectedValue(error);
+    await expect(client.getInfo()).rejects.toThrow(
+      /Mailpit API Error: .+ at UNKNOWN METHOD UNKNOWN URL/,
+    );
   });
 });

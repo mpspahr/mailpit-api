@@ -17,6 +17,7 @@
   "scripts": {
     "test": "jest **/index.spec.ts",
     "test:e2e": "jest **/e2e/index.e2e.spec.ts --runInBand",
+    "coverage": "jest --coverage",
     "build": "tsup src/index.ts --dts --format esm,cjs --outDir dist",
     "pretty": "npx prettier . --write",
     "lint": "npx eslint --fix src tests",

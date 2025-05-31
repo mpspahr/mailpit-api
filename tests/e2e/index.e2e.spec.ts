@@ -369,7 +369,6 @@ describe("MailpitClient E2E Tests", () => {
         return;
       }
       const response = await mailpit.spamAssassinCheck(messageId);
-      console.log(response);
       expect(response).toEqual({
         Error: expect.any(String),
         IsSpam: expect.any(Boolean),
@@ -405,6 +404,11 @@ describe("MailpitClient E2E Tests", () => {
       const response = await mailpit.renameTag(tagName, "renamed-tag");
       expect(response).toBe("ok");
       tagName = "renamed-tag"; // Update tagName for subsequent tests
+    });
+
+    test("getTags() should return all tags", async () => {
+      const tags = await mailpit.getTags();
+      expect(tags).toEqual(expect.arrayContaining([tagName]));
     });
 
     test("deleteTag() should delete a tag", async () => {

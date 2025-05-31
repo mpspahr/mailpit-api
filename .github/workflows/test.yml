@@ -1,0 +1,52 @@
+name: Test Suite
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches: ["**"]
+
+jobs:
+  unit-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: "**/package-lock.json"
+      - run: npm ci
+      - run: npm run test
+
+  e2e-test:
+    runs-on: ubuntu-latest
+    needs: unit-test
+    timeout-minutes: 10
+    env:
+      USERNAME: ${{ format('user_{0}', github.run_id) }}
+      PASSWORD: ${{ format('pass_{0}_{1}', github.run_id, github.run_attempt) }}
+    services:
+      mailpit:
+        image: axllent/mailpit
+        env:
+          MP_ENABLE_SPAMASSASSIN: postmark
+          MP_ENABLE_CHAOS: true
+          MP_UI_AUTH: ${{ format('{0}:{1}', env.USERNAME, env.PASSWORD) }}
+        ports:
+          - 8025:8025
+          - 1025:1025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: "**/package-lock.json"
+      - run: npm ci
+      - name: Run E2E tests
+        run: npm run test:e2e
+        env:
+          USERNAME: ${{ env.USERNAME }}
+          PASSWORD: ${{ env.PASSWORD }}
