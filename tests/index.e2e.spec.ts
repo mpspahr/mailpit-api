@@ -5,7 +5,7 @@ import {
   MailpitClient,
   MailpitConfigurationResponse,
   type MailpitSendRequest,
-} from "../../src/index";
+} from "../src/index";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -110,7 +110,7 @@ describe("MailpitClient E2E Tests", () => {
   });
 
   describe("Application Methods", () => {
-    test("getInfo() should return mailpit server information", async () => {
+    test("getInfo() should return Mailpit server information", async () => {
       const info = await mailpit.getInfo();
       expect(info).toEqual({
         Database: expect.any(String),
@@ -155,24 +155,22 @@ describe("MailpitClient E2E Tests", () => {
 
   describe("Message(s) Methods", () => {
     test("getMesssageSummary() should return thes summary of a message", async () => {
-      const summary = await mailpit.getMessageSummary(messageId);
-
-      const attachment = {
+      const expectedAttachment = {
         ContentID: expect.any(String),
         ContentType: expect.any(String),
         FileName: expect.any(String),
         PartID: expect.any(String),
         Size: expect.any(Number),
       };
-      expect(summary).toEqual({
-        Attachments: [attachment],
+      const expected = {
+        Attachments: [expectedAttachment],
         Bcc: [address],
         Cc: [address],
         Date: expect.any(String),
         From: address,
         HTML: expect.any(String),
         ID: expect.any(String),
-        Inline: [attachment],
+        Inline: [expectedAttachment],
         ListUnsubscribe: {
           Errors: expect.any(String),
           Header: expect.any(String),
@@ -187,31 +185,43 @@ describe("MailpitClient E2E Tests", () => {
         Tags: expect.any(Array<string>),
         Text: expect.any(String),
         To: [address],
-      });
+      };
+
+      let summary = await mailpit.getMessageSummary();
+      expect(summary).toEqual(expected);
+
+      summary = await mailpit.getMessageSummary(messageId);
+      expect(summary).toEqual(expected);
+      // Store attachment ID for later tests
       attachmentId = summary.Attachments[0].PartID;
     });
 
     test("getMessageHeaders() should return the headers for a message", async () => {
-      const headers = await mailpit.getMessageHeaders(messageId);
-      const headerValue = [expect.any(String)];
-      expect(headers).toEqual({
-        Bcc: headerValue,
-        Cc: headerValue,
-        "Content-Type": headerValue,
-        Date: headerValue,
-        From: headerValue,
-        "List-Unsubscribe": headerValue,
-        "Message-Id": headerValue,
-        "Mime-Version": headerValue,
-        "Reply-To": headerValue,
-        "Return-Path": headerValue,
-        Subject: headerValue,
-        To: headerValue,
-      });
+      const expectedValues = [expect.any(String)];
+      const expected = {
+        Bcc: expectedValues,
+        Cc: expectedValues,
+        "Content-Type": expectedValues,
+        Date: expectedValues,
+        From: expectedValues,
+        "List-Unsubscribe": expectedValues,
+        "Message-Id": expectedValues,
+        "Mime-Version": expectedValues,
+        "Reply-To": expectedValues,
+        "Return-Path": expectedValues,
+        Subject: expectedValues,
+        To: expectedValues,
+      };
+      let headers = await mailpit.getMessageHeaders();
+      expect(headers).toEqual(expected);
+      headers = await mailpit.getMessageHeaders(messageId);
+      expect(headers).toEqual(expected);
     });
 
     test("getMessageSource() should return the raw source of a message", async () => {
-      const source = await mailpit.getMessageSource(messageId);
+      let source = await mailpit.getMessageSource();
+      expect(source).toEqual(expect.any(String));
+      source = await mailpit.getMessageSource(messageId);
       expect(source).toEqual(expect.any(String));
     });
 
@@ -231,7 +241,9 @@ describe("MailpitClient E2E Tests", () => {
     });
 
     test("listMessages() should return a summary list of messages", async () => {
-      const response = await mailpit.listMessages(0, 10);
+      let response = await mailpit.listMessages();
+      expect(response).toEqual(messages);
+      response = await mailpit.listMessages(0, 10);
       expect(response).toEqual(messages);
     });
 
@@ -306,8 +318,7 @@ describe("MailpitClient E2E Tests", () => {
 
   describe("Check Methods", () => {
     test("htmlCheck() should return HTML validation results for a message", async () => {
-      const response = await mailpit.htmlCheck(messageId);
-      expect(response).toEqual({
+      const expected = {
         Platforms: expect.any(Object),
         Total: {
           Nodes: expect.any(Number),
@@ -344,12 +355,15 @@ describe("MailpitClient E2E Tests", () => {
             URL: expect.any(String),
           }),
         ]),
-      });
+      };
+      let response = await mailpit.htmlCheck();
+      expect(response).toEqual(expected);
+      response = await mailpit.htmlCheck(messageId);
+      expect(response).toEqual(expected);
     });
 
     test("linkCheck() should return link checker results for a message", async () => {
-      const response = await mailpit.linkCheck(messageId, true);
-      expect(response).toEqual({
+      const expected = {
         Errors: expect.any(Number),
         Links: expect.arrayContaining([
           expect.objectContaining({
@@ -358,7 +372,11 @@ describe("MailpitClient E2E Tests", () => {
             URL: expect.any(String),
           }),
         ]),
-      });
+      };
+      let response = await mailpit.linkCheck();
+      expect(response).toEqual(expected);
+      response = await mailpit.linkCheck(messageId, true);
+      expect(response).toEqual(expected);
     });
 
     test("spamAssassinCheck() should return SpamAssassin results for a message", async () => {
@@ -446,18 +464,24 @@ describe("MailpitClient E2E Tests", () => {
 
   describe("Render Methods", () => {
     test("renderMessageHTML() should return the rendered HTML for a message", async () => {
-      const html = await mailpit.renderMessageHTML(messageId);
+      let html = await mailpit.renderMessageHTML();
       expect(html).toContain(sendRequest.HTML);
+      html = await mailpit.renderMessageHTML(messageId, 1);
+      // Contains extra embedded information
+      expect(html).not.toContain(sendRequest.HTML);
+      expect(html).toContain('target="_blank" rel="noreferrer noopener"');
     });
 
     test("renderMessageText() should return the rendered text for a message", async () => {
-      const text = await mailpit.renderMessageText(messageId);
+      let text = await mailpit.renderMessageText();
+      expect(text).toContain(sendRequest.Text);
+      text = await mailpit.renderMessageText(messageId);
       expect(text).toContain(sendRequest.Text);
     });
   });
 
   describe("Error Handling", () => {
-    test("invalid authentication", async () => {
+    test("invalid authentication (response)", async () => {
       const invalidAuthMailpit = new MailpitClient(`http://${HOST}:${PORT}`, {
         username: USERNAME,
         password: "invalid-password",
@@ -467,14 +491,14 @@ describe("MailpitClient E2E Tests", () => {
       );
     });
 
-    test("invalid host", async () => {
+    test("invalid host (request)", async () => {
       const invalidUrlMailpit = new MailpitClient("http://invalid-host:9999");
       await expect(invalidUrlMailpit.getInfo()).rejects.toThrow(
         "Mailpit API Error: No response received from server at GET /api/v1/info",
       );
     });
 
-    test("malformed protocol", async () => {
+    test("malformed protocol (non-AxiosError)", async () => {
       const malformedMailpit = new MailpitClient("ht!tp://bad-url");
       await expect(malformedMailpit.getInfo()).rejects.toThrow(
         "Unexpected Error: TypeError: Invalid URL",

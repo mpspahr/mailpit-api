@@ -10,13 +10,9 @@ export default {
   },
   collectCoverage: true,
   coverageDirectory: "coverage",
-  coverageReporters: ["text", "lcov", "html"],
+  coverageReporters: ["text", "lcov"],
   collectCoverageFrom: ["src/**/*.ts", "!src/**/*.d.ts"],
-  testMatch: [
-    "**/tests/**/*.ts",
-    "**/tests/**/*.spec.ts",
-    "**/tests/**/*.test.ts",
-  ],
+  testMatch: ["**/tests/**/*.spec.ts"],
   coverageThreshold: {
     global: {
       branches: 80,
@@ -25,4 +21,5 @@ export default {
       statements: 80,
     },
   },
+  testTimeout: 10000, // 10 seconds
 };
