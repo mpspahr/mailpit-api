@@ -1,17 +1,27 @@
 {
   "name": "mailpit-api",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "A NodeJS client library, written in TypeScript, to interact with the Mailpit API.",
   "repository": {
     "type": "git",
     "url": "https://github.com/mpspahr/mailpit-api.git"
   },
+  "homepage": "https://mpspahr.github.io/mailpit-api/",
+  "bugs": {
+    "url": "https://github.com/mpspahr/mailpit-api/issues"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "exports": {
     ".": {
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
     }
   },
   "scripts": {
@@ -25,15 +35,18 @@
     "docs": "typedoc"
   },
   "keywords": [
-    "mailpit-api",
     "mailpit",
     "api",
     "client",
-    "library",
-    "wrapper",
     "email",
+    "smtp",
     "typescript",
-    "nodejs"
+    "test",
+    "playwright",
+    "e2e",
+    "nodejs",
+    "testing",
+    "automation"
   ],
   "author": "Matthew Spahr",
   "license": "MIT",
@@ -43,10 +56,10 @@
   "devDependencies": {
     "@eslint/js": "^9.28.0",
     "@jest/globals": "^29.7.0",
-    "@types/node": "^22.15.29",
+    "@types/node": "^22.15.30",
     "dotenv": "^16.5.0",
     "eslint": "^9.28.0",
-    "eslint-plugin-jest": "^28.12.0",
+    "eslint-plugin-jest": "^28.13.0",
     "jest": "^29.7.0",
     "prettier": "3.5.3",
     "ts-jest": "^29.3.4",
@@ -55,6 +68,6 @@
     "typedoc": "^0.28.5",
     "typedoc-github-theme": "^0.3.0",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.33.0"
+    "typescript-eslint": "^8.33.1"
   }
 }

@@ -23,6 +23,6 @@
     "target": "esnext"
   },
   "compileOnSave": false,
-  "exclude": ["node_modules", "dist", "test", "docs"],
-  "include": ["src", "tests/**/*.ts"]
+  "exclude": ["node_modules", "dist", "test", "docs", "coverage"],
+  "include": ["src/**/*.ts", "tests/**/*.spec.ts"]
 }

@@ -19,14 +19,13 @@ jobs:
     timeout-minutes: 10
     env:
       USERNAME: ${{ format('user_{0}', github.run_id) }}
-      PASSWORD: ${{ format('pass_{0}_{1}', github.run_id, github.run_attempt) }}
     services:
       mailpit:
         image: axllent/mailpit
         env:
           MP_ENABLE_SPAMASSASSIN: postmark
           MP_ENABLE_CHAOS: true
-          MP_UI_AUTH: ${{ format('{0}:{1}', env.USERNAME, env.PASSWORD) }}
+          MP_UI_AUTH: ${{ format('{0}:{1}', env.USERNAME, secrets.MP_PASSWORD) }}
         ports:
           - 8025:8025
           - 1025:1025
@@ -42,4 +41,9 @@ jobs:
         run: npm run test
         env:
           USERNAME: ${{ env.USERNAME }}
-          PASSWORD: ${{ env.PASSWORD }}
+          PASSWORD: ${{ secrets.MP_PASSWORD }}
+      - name: Upload coverage to Codecov
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
