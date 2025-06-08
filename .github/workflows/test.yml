@@ -1,0 +1,49 @@
+name: Test Suite
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    branches: ["main"]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: ["main"]
+    paths-ignore:
+      - "**.md"
+      - ".github/**"
+      - "!.github/workflows/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      USERNAME: ${{ format('user_{0}', github.run_id) }}
+    services:
+      mailpit:
+        image: axllent/mailpit
+        env:
+          MP_ENABLE_SPAMASSASSIN: postmark
+          MP_ENABLE_CHAOS: true
+          MP_UI_AUTH: ${{ format('{0}:{1}', env.USERNAME, secrets.MP_PASSWORD) }}
+        ports:
+          - 8025:8025
+          - 1025:1025
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: "**/package-lock.json"
+      - run: npm ci
+      - name: Run All Tests
+        run: npm run test
+        env:
+          USERNAME: ${{ env.USERNAME }}
+          PASSWORD: ${{ secrets.MP_PASSWORD }}
+      - name: Upload coverage to Codecov
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}

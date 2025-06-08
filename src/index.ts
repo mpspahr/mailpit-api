@@ -118,6 +118,8 @@ export interface MailpitConfigurationResponse {
   ChaosEnabled: boolean;
   /** Whether messages with duplicate IDs are ignored */
   DuplicatesIgnored: boolean;
+  /** Whether the delete button should be hidden */
+  HideDeleteAllButton: boolean;
   /** Label to identify this Mailpit instance */
   Label: string;
   MessageRelay: {
@@ -129,6 +131,8 @@ export interface MailpitConfigurationResponse {
     Enabled: boolean;
     /** Overrides the "From" address for all relayed messages */
     OverrideFrom: string;
+    /** @deprecated Refer to `AllowedRecipients` instead. No longer documented upstream */
+    RecipientAllowlist: string;
     /** Enforced Return-Path (if set) for relay bounces */
     ReturnPath: string;
     /** The configured SMTP server address */
@@ -155,7 +159,7 @@ export interface MailpitMessageSummaryResponse {
   /** Database ID */
   ID: string;
   /** Inline message attachements */
-  Inline: MailpitEmailAddressResponse[];
+  Inline: MailpitAttachmentResponse[];
   /** ListUnsubscribe contains a summary of List-Unsubscribe & List-Unsubscribe-Post headers including validation of the link structure */
   ListUnsubscribe: {
     /** Validation errors (if any) */
@@ -230,6 +234,8 @@ export interface MailpitMessagesSummaryResponse {
   total: number;
   /** Total number of unread messages in mailbox */
   unread: number;
+  /** @deprecated No longer documented upstream */
+  count: number;
 }
 
 /** Response for the {@link MailpitClient.getMessageHeaders | getMessageHeaders()} API containing message headers */
@@ -360,7 +366,7 @@ export interface MailpitLinkCheckResponse {
 /** Response from the {@link MailpitClient.spamAssassinCheck | spamAssassinCheck()} API containing containing SpamAssassin check results. */
 export interface MailpitSpamAssassinResponse {
   /** If populated will return an error string */
-  Errors: number;
+  Error: string;
   /** Whether the message is spam or not */
   IsSpam: boolean;
   /** Spam rules triggered */
@@ -426,7 +432,7 @@ export interface MailpitChaosTriggersResponse {
 /** Response for the {@link MailpitClient.getMessageAttachment |getMessageAttachment()} and {@link MailpitClient.getAttachmentThumbnail | getAttachmentThumbnail()} APIs containing attachment data */
 export interface MailpitAttachmentDataResponse {
   /** The attachment binary data */
-  data: ArrayBuffer;
+  data: ArrayBuffer | Buffer;
   /** The attachment MIME type */
   contentType: string;
 }
@@ -441,7 +447,7 @@ export interface MailpitAttachmentDataResponse {
  * ```
  */
 export class MailpitClient {
-  private axiosInstance: AxiosInstance;
+  private readonly axiosInstance: AxiosInstance;
 
   /**
    * Creates an instance of {@link MailpitClient}.
@@ -877,7 +883,7 @@ export class MailpitClient {
    */
   public async linkCheck(
     id: string = "latest",
-    follow: "true" | "false" = "false",
+    follow: boolean = false,
   ): Promise<MailpitLinkCheckResponse> {
     return await this.handleRequest(() =>
       this.axiosInstance.get<MailpitLinkCheckResponse>(
