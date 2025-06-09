@@ -13,6 +13,10 @@ concurrency:
 jobs:
   call-tests:
     uses: ./.github/workflows/test.yml
+    with:
+      username: ${{ github.actor }}
+    secrets:
+      password: ${{ secrets.MP_PASSWORD }}
 
   publish:
     needs: call-tests
