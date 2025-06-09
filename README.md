@@ -2,7 +2,7 @@
 
 [![Package Version](https://img.shields.io/npm/v/mailpit-api.svg?label=npm)](https://www.npmjs.com/package/mailpit-api)
 [![Test Suite](https://github.com/mpspahr/mailpit-api/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/mpspahr/mailpit-api/actions/workflows/npm-publish.yml)
-[![Code Coverage](https://codecov.io/gh/mpspahr/mailpit-api/branch/main/graph/badge.svg?precision=2&label=coverage)](https://codecov.io/gh/mpspahr/mailpit-api)
+[![Code Coverage](https://codecov.io/gh/mpspahr/mailpit-api/branch/main/graph/badge.svg)](https://codecov.io/gh/mpspahr/mailpit-api)
 [![Documentation](https://github.com/mpspahr/mailpit-api/actions/workflows/deploy-docs.yml/badge.svg?branch=main&label=docs)](https://mpspahr.github.io/mailpit-api/)
 
 A TypeScript client for interacting with [Mailpit](https://mailpit.axllent.org/)'s [REST API](https://mailpit.axllent.org/docs/api-v1/view.html#get-/api/v1/info). Ideal for automating your email testing.
@@ -76,7 +76,7 @@ test("should receive welcome email after registration", async ({
   mailpit,
 }) => {
   // Register
-  await page.goto("http://your-app.test/register");
+  await page.goto("/register");
   await page.getByTestId("email").fill("test@example.test");
   await page.getByTestId("password").fill("password123");
   await page.getByTestId("submit").click();

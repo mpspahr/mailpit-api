@@ -1,7 +1,7 @@
 {
   "name": "mailpit-api",
   "version": "1.5.0",
-  "description": "A NodeJS client library, written in TypeScript, to interact with the Mailpit API.",
+  "description": "A TypeScript client for interacting with Mailpit's REST API.",
   "repository": {
     "type": "git",
     "url": "https://github.com/mpspahr/mailpit-api.git"
@@ -46,7 +46,8 @@
     "e2e",
     "nodejs",
     "testing",
-    "automation"
+    "automation",
+    "integration"
   ],
   "author": "Matthew Spahr",
   "license": "MIT",
