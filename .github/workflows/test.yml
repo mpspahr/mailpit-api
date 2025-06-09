@@ -2,7 +2,19 @@ name: Test Suite
 
 on:
   workflow_call:
+    inputs:
+      username:
+        required: true
+        type: string
+    secrets:
+      password:
+        required: true
   workflow_dispatch:
+    inputs:
+      username:
+        description: 'Username for Mailpit'
+        required: false
+        type: string
   pull_request:
     branches: ["main"]
     types: [opened, synchronize, reopened]
@@ -18,14 +30,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      USERNAME: ${{ format('user_{0}', github.run_id) }}
+      USERNAME: ${{ inputs.username || github.event.inputs.username || github.actor }}
+      PASSWORD: ${{ secrets.password || secrets.MP_PASSWORD }}
     services:
       mailpit:
         image: axllent/mailpit
         env:
           MP_ENABLE_SPAMASSASSIN: postmark
           MP_ENABLE_CHAOS: true
-          MP_UI_AUTH: ${{ format('{0}:{1}', env.USERNAME, secrets.MP_PASSWORD) }}
+          MP_UI_AUTH: ${{ format('{0}:{1}', env.USERNAME, env.PASSWORD) }}
         ports:
           - 8025:8025
           - 1025:1025
@@ -39,9 +52,6 @@ jobs:
       - run: npm ci
       - name: Run All Tests
         run: npm run test
-        env:
-          USERNAME: ${{ env.USERNAME }}
-          PASSWORD: ${{ secrets.MP_PASSWORD }}
       - name: Upload coverage to Codecov
         if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
         uses: codecov/codecov-action@v4
