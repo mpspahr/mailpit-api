@@ -37,4 +37,7 @@ jobs:
 
   call-docs:
     needs: publish
+    permissions:
+      pages: write
+      id-token: write
     uses: ./.github/workflows/deploy-docs.yml
