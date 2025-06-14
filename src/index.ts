@@ -131,6 +131,8 @@ export interface MailpitConfigurationResponse {
     Enabled: boolean;
     /** Overrides the "From" address for all relayed messages */
     OverrideFrom: string;
+    /** Preserve the original Message-IDs when relaying messages */
+    PreserveMessageIDs: boolean;
     /** @deprecated Refer to `AllowedRecipients` instead. No longer documented upstream */
     RecipientAllowlist: string;
     /** Enforced Return-Path (if set) for relay bounces */

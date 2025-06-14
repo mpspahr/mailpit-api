@@ -144,6 +144,7 @@ describe("MailpitClient E2E Tests", () => {
           BlockedRecipients: expect.any(String),
           Enabled: expect.any(Boolean),
           OverrideFrom: expect.any(String),
+          PreserveMessageIDs: expect.any(Boolean),
           RecipientAllowlist: expect.any(String), // deprecated but still returned
           ReturnPath: expect.any(String),
           SMTPServer: expect.any(String),
