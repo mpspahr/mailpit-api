@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       username:
-        description: 'Username for Mailpit'
+        description: "Username for Mailpit"
         required: false
         type: string
   pull_request:

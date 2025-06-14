@@ -2,7 +2,7 @@
 
 [![Package Version](https://img.shields.io/npm/v/mailpit-api.svg?label=npm)](https://www.npmjs.com/package/mailpit-api)
 [![Test Suite](https://github.com/mpspahr/mailpit-api/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/mpspahr/mailpit-api/actions/workflows/npm-publish.yml)
-[![Code Coverage](https://codecov.io/gh/mpspahr/mailpit-api/branch/main/graph/badge.svg)](https://codecov.io/gh/mpspahr/mailpit-api)
+[![Code Coverage](https://codecov.io/gh/mpspahr/mailpit-api/graph/badge.svg?token=VUWKIYK1WM)](https://codecov.io/gh/mpspahr/mailpit-api)
 [![Documentation](https://github.com/mpspahr/mailpit-api/actions/workflows/deploy-docs.yml/badge.svg?branch=main&label=docs)](https://mpspahr.github.io/mailpit-api/)
 
 A TypeScript client for interacting with [Mailpit](https://mailpit.axllent.org/)'s [REST API](https://mailpit.axllent.org/docs/api-v1/view.html#get-/api/v1/info). Ideal for automating your email testing.
