@@ -1,5 +1,9 @@
 name: Test Suite
 
+permissions:
+  contents: read
+  pull-requests: read
+
 on:
   workflow_call:
     inputs:
@@ -53,7 +57,7 @@ jobs:
       - name: Run All Tests
         run: npm run test
       - name: Upload coverage to Codecov
-        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+        if: (github.event_name == 'pull_request' && github.actor != 'dependabot[bot]') || github.ref == 'refs/heads/main'
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

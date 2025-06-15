@@ -12,6 +12,9 @@ concurrency:
 
 jobs:
   call-tests:
+    permissions:
+      contents: read
+      pull-requests: read
     uses: ./.github/workflows/test.yml
     with:
       username: ${{ github.actor }}
