@@ -5,8 +5,6 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
-    reviewers:
-      - "mpspahr"
     assignees:
       - "mpspahr"
     labels:
@@ -23,8 +21,6 @@ updates:
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 3
-    reviewers:
-      - "mpspahr"
     assignees:
       - "mpspahr"
     labels:

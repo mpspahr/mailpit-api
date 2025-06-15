@@ -2,12 +2,12 @@
 
 ## Supported Versions
 
-Security updates and patches will be released for the latest major version of mailpit-api:
-
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.5.x   | :white_check_mark: |
-| < 1.5.0 | :x:                |
+| Latest  | :white_check_mark: |
+| < Latest | :x:               |
+
+Only the latest release of mailpit-api receives security updates and patches.
 
 ## Reporting a Vulnerability
 

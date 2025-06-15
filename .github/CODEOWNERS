@@ -1,0 +1,13 @@
+# Global owner
+*                       @mpspahr
+
+# Workflow files
+.github/workflows/*     @mpspahr
+
+# Package files
+package.json            @mpspahr
+package-lock.json       @mpspahr
+
+# Source code
+src/*                   @mpspahr
+tests/*                 @mpspahr
