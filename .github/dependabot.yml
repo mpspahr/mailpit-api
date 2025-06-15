@@ -1,0 +1,37 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "mpspahr"
+    assignees:
+      - "mpspahr"
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore(deps):"
+    groups:
+      npm-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "mpspahr"
+    assignees:
+      - "mpspahr"
+    labels:
+      - "actions"
+    commit-message:
+      prefix: "chore(actions):"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
