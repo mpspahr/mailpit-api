@@ -22,6 +22,10 @@ on:
   pull_request:
     branches: ["main"]
     types: [opened, synchronize, reopened]
+    paths-ignore:
+      - "**.md"
+      - ".github/**"
+      - "!.github/workflows/**"
   push:
     branches: ["main"]
     paths-ignore:
@@ -33,6 +37,11 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18, 20, 22, 24] # legacy, maintenance, lts, current
+    name: Node ${{ matrix.node-version }} Test
     env:
       USERNAME: ${{ inputs.username || github.event.inputs.username || github.actor }}
       PASSWORD: ${{ secrets.password || secrets.MP_PASSWORD }}
@@ -57,7 +66,7 @@ jobs:
       - name: Run All Tests
         run: npm run test
       - name: Upload coverage to Codecov
-        if: (github.event_name == 'pull_request' && github.actor != 'dependabot[bot]') || github.ref == 'refs/heads/main'
+        if: matrix.node-version == 22 &&  (github.event_name == 'pull_request' && github.actor != 'dependabot[bot]') || github.ref == 'refs/heads/main'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
