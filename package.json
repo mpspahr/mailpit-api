@@ -10,6 +10,13 @@
   "bugs": {
     "url": "https://github.com/mpspahr/mailpit-api/issues"
   },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "exports": {

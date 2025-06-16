@@ -13,3 +13,4 @@ typedoc.json
 src/
 tests/
 jest.config.mjs
+SECURITY.md
