@@ -86,6 +86,7 @@ describe("MailpitClient E2E Tests", () => {
         Subject: expect.any(String),
         Tags: expect.any(Array<string>),
         To: [address],
+        Username: USERNAME,
       },
     ]),
     messages_count: expect.any(Number),
@@ -186,15 +187,16 @@ describe("MailpitClient E2E Tests", () => {
         Tags: expect.any(Array<string>),
         Text: expect.any(String),
         To: [address],
+        Username: USERNAME,
       };
 
       let summary = await mailpit.getMessageSummary();
+      // Store attachment ID for later tests
+      attachmentId = summary.Attachments[0].PartID;
       expect(summary).toEqual(expected);
 
       summary = await mailpit.getMessageSummary(messageId);
       expect(summary).toEqual(expected);
-      // Store attachment ID for later tests
-      attachmentId = summary.Attachments[0].PartID;
     });
 
     test("getMessageHeaders() should return the headers for a message", async () => {

@@ -189,6 +189,8 @@ export interface MailpitMessageSummaryResponse {
   Text: string;
   /** To addresses */
   To: MailpitEmailAddressResponse[];
+  /** Username used for authentication (if provided) with the SMTP or {@link sendMessage} */
+  Username?: string;
 }
 
 /** Response for the {@link MailpitClient.listMessages| listMessages()} API containing the summary of multiple messages. */
@@ -223,6 +225,8 @@ export interface MailpitMessagesSummaryResponse {
     Tags: string[];
     /** To addresses */
     To: MailpitEmailAddressResponse[];
+    /** Username used for authentication (if provided) with the SMTP or {@link sendMessage} */
+    Username?: string;
   }[];
   /** Total number of messages matching the current query */
   messages_count: number;
