@@ -4,6 +4,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "friday"
+      time: "20:00"
     open-pull-requests-limit: 5
     assignees:
       - "mpspahr"
@@ -20,6 +22,8 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
+      day: "friday"
+      time: "20:00"
     open-pull-requests-limit: 3
     assignees:
       - "mpspahr"
