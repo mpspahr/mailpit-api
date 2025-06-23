@@ -189,7 +189,7 @@ export interface MailpitMessageSummaryResponse {
   Text: string;
   /** To addresses */
   To: MailpitEmailAddressResponse[];
-  /** Username used for authentication (if provided) with the SMTP or {@link sendMessage} */
+  /** Username used for authentication (if provided) with the SMTP or {@link MailpitClient.sendMessage| sendMessage} */
   Username?: string;
 }
 
@@ -225,7 +225,7 @@ export interface MailpitMessagesSummaryResponse {
     Tags: string[];
     /** To addresses */
     To: MailpitEmailAddressResponse[];
-    /** Username used for authentication (if provided) with the SMTP or {@link sendMessage} */
+    /** Username used for authentication (if provided) with the SMTP or {@link MailpitClient.sendMessage| sendMessage} */
     Username?: string;
   }[];
   /** Total number of messages matching the current query */
