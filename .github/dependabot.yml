@@ -14,9 +14,8 @@ updates:
     commit-message:
       prefix: "chore(deps):"
     versioning-strategy: widen
-    groups:
-      production:
-        dependency-type: "production"
+    allow:
+      - dependency-type: "production"
 
   - package-ecosystem: "github-actions"
     directory: "/"
