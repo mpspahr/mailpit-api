@@ -5,7 +5,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "friday"
-      time: "20:00"
+      time: "21:00"
     open-pull-requests-limit: 5
     assignees:
       - "mpspahr"
@@ -13,17 +13,17 @@ updates:
       - "dependencies"
     commit-message:
       prefix: "chore(deps):"
+    versioning-strategy: widen
     groups:
-      npm-dependencies:
-        patterns:
-          - "*"
+      production:
+        dependency-type: "production"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "monthly"
       day: "friday"
-      time: "20:00"
+      time: "21:00"
     open-pull-requests-limit: 3
     assignees:
       - "mpspahr"
