@@ -139,4 +139,31 @@ describe("MailpitClient", () => {
       /Mailpit API Error: .+ at UNKNOWN METHOD UNKNOWN URL/,
     );
   });
+
+  // Constructor validation tests
+  test("should throw error for malformed protocol", () => {
+    expect(() => new MailpitClient("ht!tp://bad-url")).toThrow(
+      "The value of the 'baseURL' parameter must start with http:// or https://",
+    );
+  });
+
+  // WebSocket configuration tests (connection behavior is tested in E2E)
+  test("should not auto-connect WebSocket by default", () => {
+    const client = new MailpitClient("http://localhost:8025");
+    // Access private properties via bracket notation for testing
+    expect(client["webSocket"]).toBeNull();
+  });
+
+  test("should apply custom reconnect options", () => {
+    const client = new MailpitClient("http://localhost:8025", {
+      webSocket: {
+        maxReconnectAttempts: 10,
+        reconnectDelay: 5000,
+      },
+    });
+
+    // Access private properties via bracket notation for testing
+    expect(client["maxReconnectAttempts"]).toBe(10);
+    expect(client["reconnectDelay"]).toBe(5000);
+  });
 });
