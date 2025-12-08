@@ -59,12 +59,15 @@
   "author": "Matthew Spahr",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.12.1"
+    "axios": "^1.12.1",
+    "partysocket": "^1.0.2",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
     "@jest/globals": "^30.1.2",
     "@types/node": "^22.18.3",
+    "@types/ws": "^8.5.13",
     "dotenv": "^17.2.2",
     "eslint": "^9.35.0",
     "eslint-plugin-jest": "^29.0.1",

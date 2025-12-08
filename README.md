@@ -61,6 +61,7 @@ export const test = base.extend<MyFixtures>({
     const mailpit = new MailpitClient("http://localhost:8025");
     await mailpit.deleteMessages();
     await use(mailpit);
+    mailpit.disconnect();
   },
 });
 
@@ -75,7 +76,10 @@ test("should receive welcome email after registration", async ({
   page,
   mailpit,
 }) => {
-  // Register
+  // Start waiting for the new email event before triggering the action
+  const emailPromise = mailpit.waitForEvent("new");
+
+  // Register a new user
   await page.goto("/register");
   await page.getByTestId("email").fill("test@example.test");
   await page.getByTestId("password").fill("password123");
@@ -84,12 +88,12 @@ test("should receive welcome email after registration", async ({
   // Wait for success message on page
   await expect(page.getByTestId("success-message")).toBeVisible();
 
-  // Get the welcome email
-  const message = await mailpit.getMessageSummary();
+  // Wait for the new email event (up to 5 seconds by default)
+  const event = await emailPromise;
 
-  expect(message.To[0].Address).toBe("test@example.test");
-  expect(message.From.Address).toBe("no-reply@your-app.test");
-  expect(message.Subject).toBe("Welcome to Our App");
-  expect(message.Text).toContain("Thank you for registering with our app!");
+  // Verify the email from the event data
+  expect(event.Data.To[0].Address).toBe("test@example.test");
+  expect(event.Data.From.Address).toBe("no-reply@your-app.test");
+  expect(event.Data.Subject).toBe("Welcome to Our App");
 });
 ```

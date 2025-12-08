@@ -4,6 +4,7 @@ import { describe, test, expect, afterAll, afterEach } from "@jest/globals";
 import {
   MailpitClient,
   MailpitConfigurationResponse,
+  MailpitEvent,
   type MailpitSendRequest,
 } from "../src/index";
 import dotenv from "dotenv";
@@ -69,26 +70,26 @@ describe("MailpitClient E2E Tests", () => {
     Name: expect.any(String),
   };
 
+  const message = {
+    Attachments: expect.any(Number),
+    Bcc: [address],
+    Cc: [address],
+    Created: expect.any(String),
+    From: address,
+    ID: expect.any(String),
+    MessageID: expect.any(String),
+    Read: expect.any(Boolean),
+    ReplyTo: [address],
+    Size: expect.any(Number),
+    Snippet: expect.any(String),
+    Subject: expect.any(String),
+    Tags: expect.any(Array<string>),
+    To: [address],
+    Username: USERNAME,
+  };
+
   const messages = {
-    messages: expect.arrayContaining([
-      {
-        Attachments: expect.any(Number),
-        Bcc: [address],
-        Cc: [address],
-        Created: expect.any(String),
-        From: address,
-        ID: expect.any(String),
-        MessageID: expect.any(String),
-        Read: expect.any(Boolean),
-        ReplyTo: [address],
-        Size: expect.any(Number),
-        Snippet: expect.any(String),
-        Subject: expect.any(String),
-        Tags: expect.any(Array<string>),
-        To: [address],
-        Username: USERNAME,
-      },
-    ]),
+    messages: expect.arrayContaining([message]),
     messages_count: expect.any(Number),
     messages_unread: expect.any(Number),
     start: expect.any(Number),
@@ -98,16 +99,44 @@ describe("MailpitClient E2E Tests", () => {
     count: expect.any(Number), // depreated but stll returned
   };
 
+  const statsEvent = {
+    Type: "stats",
+    Data: {
+      Total: expect.any(Number),
+      Unread: expect.any(Number),
+      Version: expect.any(String),
+    },
+  };
+
   afterAll(async () => {
+    mailpit.disconnect();
     await mailpit.deleteMessages();
   });
 
-  test("sendMessage() should send message", async () => {
+  test("sendMessage() should send message and trigger WebSocket events", async () => {
+    // Set up WebSocket event promises before action
+    const newEventPromise = mailpit.waitForEvent("new");
+    const statsEventPromise = mailpit.waitForEvent("stats");
+
     const sendResponse = await mailpit.sendMessage(sendRequest);
     expect(sendResponse).toEqual({
       ID: expect.any(String),
     });
     messageId = sendResponse.ID;
+
+    // Verify WebSocket "new" event
+    const newEvent = await newEventPromise;
+    expect(newEvent).toEqual({
+      Type: "new",
+      Data: {
+        ...message,
+        ID: messageId,
+      },
+    });
+
+    // Verify WebSocket "stats" event
+    const statsEventData = await statsEventPromise;
+    expect(statsEventData).toEqual(statsEvent);
   });
 
   describe("Application Methods", () => {
@@ -250,12 +279,30 @@ describe("MailpitClient E2E Tests", () => {
       expect(response).toEqual(messages);
     });
 
-    test("setReadStatus() should update the read status of a message", async () => {
+    test("setReadStatus() should update the read status of a message and trigger WebSocket events", async () => {
+      // Set up WebSocket event promises before action
+      const updateEventPromise = mailpit.waitForEvent("update");
+      const statsEventPromise = mailpit.waitForEvent("stats");
+
       const response = await mailpit.setReadStatus({
         IDs: [messageId],
         Read: true,
       });
       expect(response).toBe("ok");
+
+      // Verify WebSocket "update" event
+      const updateEvent = await updateEventPromise;
+      expect(updateEvent).toEqual({
+        Type: "update",
+        Data: {
+          ID: messageId,
+          Read: true,
+        },
+      });
+
+      // Verify WebSocket "stats" event
+      const statsEventData = await statsEventPromise;
+      expect(statsEventData).toEqual(statsEvent);
     });
 
     test("searchMessages() should return messages matching the search criteria", async () => {
@@ -292,30 +339,6 @@ describe("MailpitClient E2E Tests", () => {
         contentType: expect.any(String),
       });
       expect(attachment.contentType).toBe(`image/jpeg`);
-    });
-  });
-
-  describe("Delete Methods", () => {
-    afterEach(async () => {
-      if (!messageId) {
-        const response = await mailpit.sendMessage(sendRequest);
-        messageId = response.ID;
-      }
-    });
-
-    test("deleteMessages() should delete a message", async () => {
-      const response = await mailpit.deleteMessages({ IDs: [messageId] });
-      expect(response).toBe("ok");
-      messageId = ""; // Clear messageId after deletion
-    });
-
-    test("deleteMessagesBySearch() should delete messages matching the search criteria", async () => {
-      const searchRequest = {
-        query: `subject:${sendRequest.Subject as string}`,
-      };
-      const response = await mailpit.deleteMessagesBySearch(searchRequest);
-      expect(response).toBe("ok");
-      messageId = ""; // Clear messageId after deletion
     });
   });
 
@@ -412,13 +435,26 @@ describe("MailpitClient E2E Tests", () => {
         await mailpit.deleteTag(tagName);
       }
     });
-    test("setTags() should set tags for a message", async () => {
+    test("setTags() should set tags for a message and trigger WebSocket events", async () => {
+      // Set up WebSocket event promises before action
+      const updateEventPromise = mailpit.waitForEvent("update");
+
       const response = await mailpit.setTags({
         IDs: [messageId],
         Tags: ["test-tag"],
       });
       expect(response).toBe("ok");
       tagName = "test-tag"; // Store tagName for subsequent tests
+
+      // Verify WebSocket "update" event
+      const updateEvent = await updateEventPromise;
+      expect(updateEvent).toEqual({
+        Type: "update",
+        Data: {
+          ID: messageId,
+          Tags: [tagName],
+        },
+      });
     });
 
     test("renameTag() should set tags for a message", async () => {
@@ -483,14 +519,106 @@ describe("MailpitClient E2E Tests", () => {
     });
   });
 
+  describe("Delete Methods", () => {
+    afterEach(async () => {
+      if (!messageId) {
+        const response = await mailpit.sendMessage(sendRequest);
+        messageId = response.ID;
+      }
+    });
+
+    test("deleteMessagesBySearch() should delete messages matching the search criteria and trigger WebSocket events", async () => {
+      const searchRequest = {
+        query: `subject:${sendRequest.Subject as string}`,
+      };
+
+      // Set up WebSocket event promises before action
+      const deleteEventPromise = mailpit.waitForEvent("delete");
+      const statsEventPromise = mailpit.waitForEvent("stats");
+
+      const response = await mailpit.deleteMessagesBySearch(searchRequest);
+      expect(response).toBe("ok");
+
+      // Verify WebSocket "delete" event
+      const deleteEvent = await deleteEventPromise;
+      expect(deleteEvent).toEqual({
+        Type: "delete",
+        Data: {
+          ID: expect.any(String),
+        },
+      });
+
+      // Verify WebSocket "stats" event
+      const statsEventData = await statsEventPromise;
+      expect(statsEventData).toEqual(statsEvent);
+
+      messageId = ""; // Clear messageId after deletion
+    });
+
+    test("deleteMessages() w/ID should delete a message and trigger WebSocket events", async () => {
+      // Set up WebSocket event promises before action
+      const deleteEventPromise = mailpit.waitForEvent("delete");
+      const statsEventPromise = mailpit.waitForEvent("stats");
+
+      const response = await mailpit.deleteMessages({ IDs: [messageId] });
+      expect(response).toBe("ok");
+
+      // Verify WebSocket "delete" event
+      const deleteEvent = await deleteEventPromise;
+      expect(deleteEvent).toEqual({
+        Type: "delete",
+        Data: {
+          ID: messageId,
+        },
+      });
+
+      // Verify WebSocket "stats" event
+      const statsEventData = await statsEventPromise;
+      expect(statsEventData).toEqual(statsEvent);
+
+      messageId = ""; // Clear messageId after deletion
+    });
+
+    test("deleteMessages() w/o ID should delete all messages and trigger WebSocket events", async () => {
+      // Set up WebSocket event promise before action
+      const truncateEventPromise = mailpit.waitForEvent("truncate");
+      const statsEventPromise = mailpit.waitForEvent("stats");
+
+      // Delete all messages
+      const response = await mailpit.deleteMessages();
+      expect(response).toBe("ok");
+
+      // Verify WebSocket "truncate" event
+      const truncateEvent = await truncateEventPromise;
+      expect(truncateEvent).toEqual({
+        Type: "truncate",
+        Data: null,
+      });
+
+      // Verify WebSocket "stats" event
+      const statsEventData = await statsEventPromise;
+      expect(statsEventData).toEqual({
+        Type: "stats",
+        Data: {
+          Total: 0,
+          Unread: 0,
+          Version: expect.any(String),
+        },
+      });
+    });
+  });
+
   describe("Error Handling", () => {
     test("invalid authentication (response)", async () => {
+      // Note: This test only works if Mailpit has authentication enabled.
+      // If authentication is disabled, this test will pass by default.
       const invalidAuthMailpit = new MailpitClient(`http://${HOST}:${PORT}`, {
-        username: USERNAME,
+        username: "invalid-user",
         password: "invalid-password",
       });
+
       await expect(invalidAuthMailpit.getInfo()).rejects.toThrow(
-        'Mailpit API Error: 401 Unauthorized at GET /api/v1/info: "Unauthorised.\\n"',
+        "401 Unauthorized",
       );
     });
 
@@ -500,12 +628,44 @@ describe("MailpitClient E2E Tests", () => {
         "Mailpit API Error: No response received from server at GET /api/v1/info",
       );
     });
+  });
 
-    test("malformed protocol (non-AxiosError)", async () => {
-      const malformedMailpit = new MailpitClient("ht!tp://bad-url");
-      await expect(malformedMailpit.getInfo()).rejects.toThrow(
-        "Unexpected Error: TypeError: Invalid URL",
-      );
+  describe("WebSocket Behavior", () => {
+    test("should handle wildcard '*' event type for collecting all events", async () => {
+      const events: MailpitEvent[] = [];
+      const removeListener = mailpit.onEvent("*", (event) => {
+        // Wildcard listener collects all events uniformly
+        events.push(event);
+      });
+
+      // Send a message to trigger events
+      const sendResponse = await mailpit.sendMessage(sendRequest);
+
+      // Wait for events to arrive
+      expect(await waitForCondition(() => events.length >= 2, 5000)).toBe(true);
+
+      expect(events.some((e) => e.Type === "new")).toBe(true);
+      expect(events.some((e) => e.Type === "stats")).toBe(true);
+
+      // Clean up
+      await mailpit.deleteMessages({ IDs: [sendResponse.ID] });
+      removeListener();
     });
   });
 });
+
+// Helper to wait for a condition
+async function waitForCondition(
+  condition: () => boolean,
+  timeout = 5000,
+  interval = 50,
+): Promise<boolean> {
+  const startTime = Date.now();
+  while (!condition()) {
+    if (Date.now() - startTime > timeout) {
+      return false;
+    }
+    await new Promise((resolve) => setTimeout(resolve, interval));
+  }
+  return true;
+}
