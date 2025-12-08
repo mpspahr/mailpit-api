@@ -508,4 +508,81 @@ describe("MailpitClient E2E Tests", () => {
       );
     });
   });
+
+  describe("WebSocket", () => {
+    test("should receive new message event via WebSocket", async () => {
+      // Create client with WebSocket enabled
+      const wsMailpit = new MailpitClient(
+        `http://${HOST}:${PORT}`,
+        { username: USERNAME, password: PASSWORD },
+        { autoConnect: true },
+      );
+
+      try {
+        // Wait for WebSocket to connect
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // Set up promise to wait for new message event
+        const eventPromise = wsMailpit.waitForWebSocketEvent("new", 5000);
+
+        // Send a message
+        const result = await wsMailpit.sendMessage({
+          From: { Email: "websocket-test@example.test" },
+          To: [{ Email: "recipient@example.test" }],
+          Subject: "WebSocket E2E Test",
+          Text: "Testing real-time WebSocket events",
+        });
+
+        // Wait for the WebSocket event
+        const event = await eventPromise;
+
+        // Verify the event structure matches MailpitWebSocketMessageSummary
+        expect(event.Type).toBe("new");
+        expect(event.Data).toHaveProperty("ID", result.ID);
+        expect(event.Data).toHaveProperty("Subject", "WebSocket E2E Test");
+        expect(event.Data).toHaveProperty(
+          "Snippet",
+          "Testing real-time WebSocket events",
+        );
+        expect(event.Data).toHaveProperty("Created");
+        expect(event.Data).toHaveProperty("Read", false);
+        expect(event.Data).toHaveProperty("Attachments", 0);
+        expect(event.Data).toHaveProperty("Size");
+        expect((event.Data as any).From).toEqual({
+          Address: "websocket-test@example.test",
+          Name: "",
+        });
+        expect((event.Data as any).To).toEqual([
+          { Address: "recipient@example.test", Name: "" },
+        ]);
+
+        // Clean up message
+        await wsMailpit.deleteMessages({ IDs: [result.ID] });
+      } finally {
+        // Always clean up WebSocket connection
+        wsMailpit.disconnectWebSocket();
+      }
+    });
+
+    test("should handle WebSocket without auto-connect", async () => {
+      const wsMailpit = new MailpitClient(`http://${HOST}:${PORT}`, {
+        username: USERNAME,
+        password: PASSWORD,
+      });
+
+      try {
+        // WebSocket should not be connected initially
+        expect(wsMailpit.webSocket).toBeNull();
+
+        // Manually connect
+        wsMailpit.connectWebSocket();
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        expect(wsMailpit.webSocket).not.toBeNull();
+      } finally {
+        // Always clean up WebSocket connection
+        wsMailpit.disconnectWebSocket();
+      }
+    });
+  });
 });
