@@ -3,7 +3,8 @@ import axios, {
   type AxiosResponse,
   isAxiosError,
 } from "axios";
-import WebSocket from "isomorphic-ws";
+import { WebSocket as ReconnectingWebSocket } from "partysocket";
+import WS from "ws";
 
 // COMMON TYPES
 /** Represents a name and email address for a request. */
@@ -553,27 +554,6 @@ export interface MailpitWebSocketEventMap {
 /** Valid WebSocket event types */
 export type MailpitWebSocketEventType = keyof MailpitWebSocketEventMap;
 
-/** Configuration options for the Mailpit client */
-export interface MailpitClientOptions {
-  /** Basic authentication credentials */
-  auth?: {
-    username: string;
-    password: string;
-  };
-  /** WebSocket configuration */
-  webSocket?: MailpitWebSocketOptions;
-}
-
-/** Configuration options for WebSocket connection */
-export interface MailpitWebSocketOptions {
-  /** Maximum number of reconnection attempts. Defaults to 5. Set to 0 to disable reconnection. */
-  maxReconnectAttempts?: number;
-  /** Initial reconnection delay in milliseconds. Defaults to 2000ms. Uses exponential backoff. */
-  reconnectDelay?: number;
-  /** Whether to automatically connect when creating the client. Defaults to false. */
-  autoConnect?: boolean;
-}
-
 /**
  * Client for interacting with the {@link https://mailpit.axllent.org/docs/api-v1/ | Mailpit API}.
  * @example
@@ -587,12 +567,7 @@ export class MailpitClient {
   private readonly axiosInstance: AxiosInstance;
   private readonly baseURL: string;
   private readonly wsURL: string;
-  private webSocket: WebSocket | null = null;
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 2000;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private shouldReconnect = true;
+  private webSocket: ReconnectingWebSocket | null = null;
   private eventListeners: Map<
     string,
     Set<(event: MailpitWebSocketEvent) => void>
@@ -601,7 +576,7 @@ export class MailpitClient {
   /**
    * Creates an instance of {@link MailpitClient}.
    * @param baseURL - The base URL of the Mailpit API.
-   * @param options - Optional configuration
+   * @param auth - Optional basic authentication credentials
    * @example No Auth
    * ```typescript
    * const mailpit = new MailpitClient("http://localhost:8025");
@@ -609,22 +584,12 @@ export class MailpitClient {
    * @example Basic Auth
    * ```typescript
    * const mailpit = new MailpitClient("http://localhost:8025", {
-   *   auth: { username: "admin", password: "supersecret" }
-   * });
-   * ```
-   * @example With WebSocket auto-reconnect changes
-   * ```typescript
-   * const mailpit = new MailpitClient("http://localhost:8025", {
-   *   webSocket: { maxReconnectAttempts: 10 }
+   *   username: "admin",
+   *   password: "supersecret"
    * });
    * ```
    */
-  constructor(
-    baseURL: string,
-    authOrOptions?:
-      | { username: string; password: string }
-      | MailpitClientOptions,
-  ) {
+  constructor(baseURL: string, auth?: { username: string; password: string }) {
     if (baseURL && !baseURL.startsWith("http")) {
       throw new Error(
         "The value of the 'baseURL' parameter must start with http:// or https://",
@@ -634,39 +599,13 @@ export class MailpitClient {
     this.baseURL = baseURL;
     this.wsURL = `${baseURL.replace(/^http/, "ws")}/api/events`;
 
-    // Handle both old and new constructor signatures
-    let options: MailpitClientOptions = {};
-    if (authOrOptions) {
-      if ("username" in authOrOptions) {
-        // Old signature: (baseURL, auth)
-        options = { auth: authOrOptions };
-      } else {
-        // New signature: (baseURL, options)
-        options = authOrOptions;
-      }
-    }
-
     this.axiosInstance = axios.create({
       baseURL,
-      auth: options.auth,
+      auth,
       validateStatus: function (status) {
         return status === 200;
       },
     });
-
-    // Apply WebSocket options
-    const wsOptions = options.webSocket;
-    if (wsOptions) {
-      if (wsOptions.maxReconnectAttempts !== undefined) {
-        this.maxReconnectAttempts = wsOptions.maxReconnectAttempts;
-      }
-      if (wsOptions.reconnectDelay !== undefined) {
-        this.reconnectDelay = wsOptions.reconnectDelay;
-      }
-      if (wsOptions.autoConnect) {
-        this.connectWebSocket();
-      }
-    }
   }
 
   /**
@@ -1259,46 +1198,39 @@ export class MailpitClient {
   }
 
   /**
-   * Connects to the WebSocket endpoint to receive real-time updates.
-   * @remarks This is an undocumented endpoint. The WebSocket broadcasts various event types including "new" (new messages), "update", "delete", and "stats".
-   * @returns A promise that resolves when the WebSocket connection is established
-   * @example
-   * ```typescript
-   * mailpit.connectWebSocket();
-   * const eventPromise = mailpit.waitForWebSocketEvent("new");
-   * // ... send a message ...
-   * const event = await eventPromise;
-   * console.log("New message:", event.Data);
-   * ```
+   * @internal
+   * Connects to the WebSocket endpoint for receiving real-time events.
    */
-  public connectWebSocket(): void {
+  private connectWebSocket(): void {
     // Return if already connected or connecting
     if (
       this.webSocket &&
-      (this.webSocket.readyState === WebSocket.OPEN ||
-        this.webSocket.readyState === WebSocket.CONNECTING)
+      (this.webSocket.readyState === ReconnectingWebSocket.OPEN ||
+        this.webSocket.readyState === ReconnectingWebSocket.CONNECTING)
     ) {
       return;
     }
 
-    let headers;
+    // Create options for WebSocket with auth headers
+    const wsOptions: WS.ClientOptions = {};
     if (this.axiosInstance.defaults.auth) {
-      headers = {
+      wsOptions.headers = {
         Authorization: `Basic ${Buffer.from(`${this.axiosInstance.defaults.auth.username}:${this.axiosInstance.defaults.auth.password}`).toString("base64")}`,
       };
     }
-    this.shouldReconnect = true;
-    this.webSocket = new WebSocket(this.wsURL, { headers });
 
-    this.webSocket.onopen = () => {
-      this.reconnectAttempts = 0;
-      if (this.reconnectTimer) {
-        clearTimeout(this.reconnectTimer);
-        this.reconnectTimer = null;
+    // Create a custom WebSocket class that includes our options
+    class CustomWebSocket extends WS {
+      constructor(address: string, options?: WS.ClientOptions) {
+        super(address, { ...wsOptions, ...options });
       }
-    };
+    }
 
-    this.webSocket.onmessage = (event) => {
+    this.webSocket = new ReconnectingWebSocket(this.wsURL, undefined, {
+      WebSocket: CustomWebSocket,
+    });
+
+    this.webSocket.addEventListener("message", (event) => {
       try {
         const message: MailpitWebSocketEvent = JSON.parse(
           event.data as string,
@@ -1307,30 +1239,7 @@ export class MailpitClient {
       } catch {
         // Silently ignore parse errors
       }
-    };
-
-    this.webSocket.onerror = () => {
-      // Error will be handled in onclose - don't do anything here to avoid infinite loops
-    };
-
-    this.webSocket.onclose = (event) => {
-      this.webSocket = null;
-
-      // Auto-reconnect logic - only if shouldReconnect is true and we haven't exceeded max attempts
-      if (
-        this.shouldReconnect &&
-        event.code !== 1000 &&
-        this.reconnectAttempts < this.maxReconnectAttempts
-      ) {
-        const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
-        this.reconnectTimer = setTimeout(() => {
-          this.reconnectAttempts++;
-          this.reconnectTimer = null; // Clear timer reference after it fires
-          this.connectWebSocket();
-        }, delay);
-        this.reconnectTimer.unref(); // Prevent timer from keeping process alive
-      }
-    };
+    });
   }
 
   /**
@@ -1343,11 +1252,7 @@ export class MailpitClient {
     const listeners = this.eventListeners.get(message.Type);
     if (listeners) {
       listeners.forEach((listener) => {
-        try {
-          listener(message);
-        } catch {
-          // Silently ignore errors in event listeners
-        }
+        listener(message);
       });
     }
 
@@ -1355,11 +1260,7 @@ export class MailpitClient {
     const wildcardListeners = this.eventListeners.get("*");
     if (wildcardListeners) {
       wildcardListeners.forEach((listener) => {
-        try {
-          listener(message);
-        } catch {
-          // Silently ignore errors in event listeners
-        }
+        listener(message);
       });
     }
   }
@@ -1372,28 +1273,12 @@ export class MailpitClient {
    * ```
    */
   public disconnectWebSocket(): void {
-    this.shouldReconnect = false;
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
     if (this.webSocket) {
-      // Remove existing event handlers to prevent reconnection
       const ws = this.webSocket;
       this.webSocket = null;
-
-      if (
-        ws.readyState === WebSocket.OPEN ||
-        ws.readyState === WebSocket.CONNECTING
-      ) {
-        ws.onclose = null;
-        ws.onerror = null;
-        ws.onmessage = null;
-        ws.onopen = null;
-        ws.close(1000);
-      }
+      // Close with code 1000 (normal closure) to prevent reconnection
+      ws.close(1000, "Client disconnect");
     }
-    this.reconnectAttempts = 0;
   }
 
   /**
@@ -1449,7 +1334,7 @@ export class MailpitClient {
    * Waits for the next WebSocket event of a specific type.
    * @remarks Automatically connects to the WebSocket if not already connected. Primarily intended for testing scenarios.
    * @param eventType - The type of event to wait for (e.g., "new" for new messages)
-   * @param timeout - Optional timeout in milliseconds (default: 10000ms)
+   * @param timeout - Optional timeout in milliseconds (default: 5000ms)
    * @returns A promise that resolves with the event when received, or rejects on timeout
    * @example
    * ```typescript
@@ -1470,15 +1355,19 @@ export class MailpitClient {
    */
   public waitForWebSocketEvent<T extends keyof MailpitWebSocketEventMap>(
     eventType: T,
-    timeout: number = 10_000,
+    timeout: number = 5_000,
   ): Promise<MailpitWebSocketEventMap[T]> {
-    // Ensure WebSocket is connected
-    if (!this.webSocket || this.webSocket.readyState !== WebSocket.OPEN) {
+    // Ensure WebSocket is connected or connecting
+    if (
+      !this.webSocket ||
+      this.webSocket.readyState === ReconnectingWebSocket.CLOSED
+    ) {
       this.connectWebSocket();
     }
 
     return new Promise((resolve, reject) => {
       let resolved = false;
+
       const timer = setTimeout(() => {
         if (!resolved) {
           resolved = true;

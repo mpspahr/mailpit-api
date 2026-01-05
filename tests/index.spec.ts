@@ -7,6 +7,7 @@ import {
   test,
 } from "@jest/globals";
 import axios, { AxiosInstance } from "axios";
+import { WebSocket as ReconnectingWebSocket } from "partysocket";
 import { MailpitClient } from "../src/index";
 
 jest.mock("axios");
@@ -21,6 +22,7 @@ describe("MailpitClient", () => {
       post: jest.fn(),
       put: jest.fn(),
       delete: jest.fn(),
+      defaults: {},
     } as unknown as jest.Mocked<AxiosInstance>;
 
     // Mock axios.create to return our mocked instance
@@ -150,20 +152,103 @@ describe("MailpitClient", () => {
   // WebSocket configuration tests (connection behavior is tested in E2E)
   test("should not auto-connect WebSocket by default", () => {
     const client = new MailpitClient("http://localhost:8025");
-    // Access private properties via bracket notation for testing
     expect(client["webSocket"]).toBeNull();
   });
 
-  test("should apply custom reconnect options", () => {
-    const client = new MailpitClient("http://localhost:8025", {
-      webSocket: {
-        maxReconnectAttempts: 10,
-        reconnectDelay: 5000,
-      },
-    });
+  test("connectWebSocket() should return early when already connected", () => {
+    const internalClient = client as unknown as {
+      connectWebSocket: () => void;
+      webSocket: ReconnectingWebSocket | null;
+    };
 
-    // Access private properties via bracket notation for testing
-    expect(client["maxReconnectAttempts"]).toBe(10);
-    expect(client["reconnectDelay"]).toBe(5000);
+    const existingWebSocket = {
+      readyState: ReconnectingWebSocket.OPEN,
+    } as unknown as ReconnectingWebSocket;
+
+    internalClient.webSocket = existingWebSocket;
+
+    internalClient.connectWebSocket();
+
+    expect(internalClient.webSocket).toBe(existingWebSocket);
+  });
+
+  test("disconnectWebSocket() should do nothing when no WebSocket exists", () => {
+    const internalClient = client as unknown as {
+      disconnectWebSocket: () => void;
+      webSocket: ReconnectingWebSocket | null;
+    };
+
+    internalClient.webSocket = null;
+    internalClient.disconnectWebSocket();
+
+    expect(internalClient.webSocket).toBeNull();
+  });
+
+  test("onWebSocketEvent() should return unsubscribe function that removes listener", () => {
+    const internalClient = client as unknown as {
+      onWebSocketEvent: (
+        eventType: string,
+        listener: (event: unknown) => void,
+      ) => () => void;
+      eventListeners: Map<string, Set<(event: unknown) => void>>;
+    };
+
+    const listener1 = jest.fn();
+    const listener2 = jest.fn();
+
+    const unsubscribe1 = internalClient.onWebSocketEvent("new", listener1);
+    const unsubscribe2 = internalClient.onWebSocketEvent("new", listener2);
+
+    expect(internalClient.eventListeners.get("new")?.size).toBe(2);
+
+    unsubscribe1();
+    expect(internalClient.eventListeners.get("new")?.size).toBe(1);
+
+    unsubscribe2();
+    expect(internalClient.eventListeners.has("new")).toBe(false);
+  });
+
+  test("waitForWebSocketEvent() should auto-connect when WebSocket is closed", () => {
+    const internalClient = client as unknown as {
+      waitForWebSocketEvent: (
+        eventType: string,
+        timeout?: number,
+      ) => Promise<unknown>;
+      webSocket: ReconnectingWebSocket | null;
+    };
+
+    const closedWebSocket = {
+      readyState: ReconnectingWebSocket.CLOSED,
+    } as unknown as ReconnectingWebSocket;
+
+    internalClient.webSocket = closedWebSocket;
+
+    const promise = internalClient.waitForWebSocketEvent("new", 100);
+
+    expect(internalClient.webSocket).not.toBe(closedWebSocket);
+    expect(internalClient.webSocket).not.toBeNull();
+
+    // Clean up the promise to avoid unhandled rejection
+    promise.catch(() => {});
+  });
+
+  test("waitForWebSocketEvent() should timeout and remove listener", async () => {
+    const internalClient = client as unknown as {
+      waitForWebSocketEvent: (
+        eventType: string,
+        timeout?: number,
+      ) => Promise<unknown>;
+      eventListeners: Map<string, Set<(event: unknown) => void>>;
+    };
+
+    const promise = internalClient.waitForWebSocketEvent("new", 50);
+
+    await expect(promise).rejects.toThrow(
+      'Timeout waiting for WebSocket event of type "new"',
+    );
+
+    // Verify listener was cleaned up (Set should be empty)
+    const listeners = internalClient.eventListeners.get("new");
+    expect(listeners?.size || 0).toBe(0);
   });
 });

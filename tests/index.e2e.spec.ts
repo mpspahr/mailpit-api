@@ -20,8 +20,8 @@ describe("MailpitClient E2E Tests", () => {
 
   // Initialize MailpitClient with environment variables and WebSocket enabled
   const mailpit = new MailpitClient(`http://${HOST}:${PORT}`, {
-    auth: { username: USERNAME, password: PASSWORD },
-    webSocket: { autoConnect: true },
+    username: USERNAME,
+    password: PASSWORD,
   });
 
   // Attachemnt file setup
@@ -109,19 +109,14 @@ describe("MailpitClient E2E Tests", () => {
   };
 
   afterAll(async () => {
-    // Save reference to socket before disconnectWebSocket nulls it
-    const ws = mailpit["webSocket"];
-    // Disconnect properly (cleans up handlers and state)
     mailpit.disconnectWebSocket();
-    // Then terminate the saved socket reference for immediate cleanup
-    ws?.terminate();
     await mailpit.deleteMessages();
   });
 
   test("sendMessage() should send message and trigger WebSocket events", async () => {
     // Set up WebSocket event promises before action
-    const newEventPromise = mailpit.waitForWebSocketEvent("new", 5000);
-    const statsEventPromise = mailpit.waitForWebSocketEvent("stats", 5000);
+    const newEventPromise = mailpit.waitForWebSocketEvent("new");
+    const statsEventPromise = mailpit.waitForWebSocketEvent("stats");
 
     const sendResponse = await mailpit.sendMessage(sendRequest);
     expect(sendResponse).toEqual({
@@ -286,8 +281,8 @@ describe("MailpitClient E2E Tests", () => {
 
     test("setReadStatus() should update the read status of a message and trigger WebSocket events", async () => {
       // Set up WebSocket event promises before action
-      const updateEventPromise = mailpit.waitForWebSocketEvent("update", 5000);
-      const statsEventPromise = mailpit.waitForWebSocketEvent("stats", 5000);
+      const updateEventPromise = mailpit.waitForWebSocketEvent("update");
+      const statsEventPromise = mailpit.waitForWebSocketEvent("stats");
 
       const response = await mailpit.setReadStatus({
         IDs: [messageId],
@@ -442,7 +437,7 @@ describe("MailpitClient E2E Tests", () => {
     });
     test("setTags() should set tags for a message and trigger WebSocket events", async () => {
       // Set up WebSocket event promises before action
-      const updateEventPromise = mailpit.waitForWebSocketEvent("update", 5000);
+      const updateEventPromise = mailpit.waitForWebSocketEvent("update");
 
       const response = await mailpit.setTags({
         IDs: [messageId],
@@ -538,8 +533,8 @@ describe("MailpitClient E2E Tests", () => {
       };
 
       // Set up WebSocket event promises before action
-      const deleteEventPromise = mailpit.waitForWebSocketEvent("delete", 5000);
-      const statsEventPromise = mailpit.waitForWebSocketEvent("stats", 5000);
+      const deleteEventPromise = mailpit.waitForWebSocketEvent("delete");
+      const statsEventPromise = mailpit.waitForWebSocketEvent("stats");
 
       const response = await mailpit.deleteMessagesBySearch(searchRequest);
       expect(response).toBe("ok");
@@ -562,8 +557,8 @@ describe("MailpitClient E2E Tests", () => {
 
     test("deleteMessages() w/ID should delete a message and trigger WebSocket events", async () => {
       // Set up WebSocket event promises before action
-      const deleteEventPromise = mailpit.waitForWebSocketEvent("delete", 5000);
-      const statsEventPromise = mailpit.waitForWebSocketEvent("stats", 5000);
+      const deleteEventPromise = mailpit.waitForWebSocketEvent("delete");
+      const statsEventPromise = mailpit.waitForWebSocketEvent("stats");
 
       const response = await mailpit.deleteMessages({ IDs: [messageId] });
       expect(response).toBe("ok");
@@ -586,11 +581,8 @@ describe("MailpitClient E2E Tests", () => {
 
     test("deleteMessages() w/o ID should delete all messages and trigger WebSocket events", async () => {
       // Set up WebSocket event promise before action
-      const truncateEventPromise = mailpit.waitForWebSocketEvent(
-        "truncate",
-        5000,
-      );
-      const statsEventPromise = mailpit.waitForWebSocketEvent("stats", 5000);
+      const truncateEventPromise = mailpit.waitForWebSocketEvent("truncate");
+      const statsEventPromise = mailpit.waitForWebSocketEvent("stats");
 
       // Delete all messages
       const response = await mailpit.deleteMessages();
@@ -639,300 +631,24 @@ describe("MailpitClient E2E Tests", () => {
   });
 
   describe("WebSocket Behavior", () => {
-    test("should connect WebSocket when autoConnect is true", () => {
-      // Already connected via constructor with autoConnect: true
-      expect(mailpit["webSocket"]).not.toBeNull();
-      expect(mailpit["webSocket"]?.readyState).toBe(WebSocket.OPEN);
-    });
-
-    test("should handle manual WebSocket connection", async () => {
-      const wsMailpit = new MailpitClient(`http://${HOST}:${PORT}`, {
-        username: USERNAME,
-        password: PASSWORD,
-      });
-
-      try {
-        // WebSocket should not be connected initially
-        expect(wsMailpit["webSocket"]).toBeNull();
-
-        // Manually connect and wait for it to open
-        wsMailpit.connectWebSocket();
-        expect(
-          await waitForCondition(
-            () => wsMailpit["webSocket"]?.readyState === WebSocket.OPEN,
-          ),
-        ).toBe(true); // WebSocket should connect successfully
-      } finally {
-        // Save reference before disconnecting, then terminate
-        const ws = wsMailpit["webSocket"];
-        wsMailpit.disconnectWebSocket();
-        ws?.terminate();
-      }
-    });
-
-    test("should handle automatic reconnection with timer firing", async () => {
-      const wsMailpit = new MailpitClient(`http://${HOST}:${PORT}`, {
-        auth: {
-          username: USERNAME,
-          password: PASSWORD,
-        },
-        webSocket: {
-          maxReconnectAttempts: 3,
-          reconnectDelay: 500, // Short delay so timer fires quickly
-        },
-      });
-
-      try {
-        // Connect initially and wait for it to open
-        wsMailpit.connectWebSocket();
-        expect(
-          await waitForCondition(
-            () => wsMailpit["webSocket"]?.readyState === WebSocket.OPEN,
-          ),
-        ).toBe(true); // WebSocket should connect initially
-
-        // Force a network error by terminating the underlying socket
-        /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
-        const ws: any = wsMailpit["webSocket"];
-        if (ws && ws._socket) {
-          ws._socket.destroy();
-        }
-        /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
-
-        // Wait for socket to close
-        expect(
-          await waitForCondition(
-            () => wsMailpit["webSocket"]?.readyState !== WebSocket.OPEN,
-            2000,
-          ),
-        ).toBe(true); // WebSocket should close after socket destruction
-
-        // Wait for automatic reconnection to complete (timer fires, executing lines 1327-1328, then onopen clears timer via lines 1375-1376)
-        expect(
-          await waitForCondition(
-            () => wsMailpit["webSocket"]?.readyState === WebSocket.OPEN,
-            3000,
-          ),
-        ).toBe(true); // WebSocket should reconnect automatically
-
-        // Verify timer was cleared and attempts reset
-        expect(wsMailpit["reconnectTimer"]).toBeNull();
-        expect(wsMailpit["reconnectAttempts"]).toBe(0);
-      } finally {
-        // Save reference before disconnecting, then terminate
-        const ws = wsMailpit["webSocket"];
-        wsMailpit.disconnectWebSocket();
-        ws?.terminate();
-      }
-    });
-
     test("should handle waitForWebSocketEvent with wildcard '*' event type", async () => {
       const events: MailpitWebSocketEvent[] = [];
       const removeListener = mailpit.onWebSocketEvent("*", (event) => {
         events.push(event);
       });
 
-      try {
-        // Send a message to trigger events
-        const sendResponse = await mailpit.sendMessage(sendRequest);
+      // Send a message to trigger events
+      const sendResponse = await mailpit.sendMessage(sendRequest);
 
-        // Wait for events to arrive
-        expect(await waitForCondition(() => events.length >= 2, 5000)).toBe(
-          true,
-        );
+      // Wait for events to arrive
+      expect(await waitForCondition(() => events.length >= 2, 5000)).toBe(true);
 
-        expect(events.some((e) => e.Type === "new")).toBe(true);
-        expect(events.some((e) => e.Type === "stats")).toBe(true);
+      expect(events.some((e) => e.Type === "new")).toBe(true);
+      expect(events.some((e) => e.Type === "stats")).toBe(true);
 
-        // Clean up
-        await mailpit.deleteMessages({ IDs: [sendResponse.ID] });
-        removeListener();
-      } finally {
-        // Don't disconnect main mailpit instance in this test
-      }
-    });
-
-    test("should auto-connect when onWebSocketEvent is called without connection", async () => {
-      const disconnectedMailpit = new MailpitClient(`http://${HOST}:${PORT}`, {
-        auth: {
-          username: USERNAME,
-          password: PASSWORD,
-        },
-      });
-
-      try {
-        // Don't call connectWebSocket manually - let onWebSocketEvent do it (line 1417)
-        expect(disconnectedMailpit["webSocket"]).toBeNull();
-
-        const events: MailpitWebSocketEvent[] = [];
-        const removeListener = disconnectedMailpit.onWebSocketEvent(
-          "new",
-          (event) => {
-            events.push(event);
-          },
-        );
-
-        // Verify it auto-connected
-        expect(
-          await waitForCondition(
-            () =>
-              disconnectedMailpit["webSocket"]?.readyState === WebSocket.OPEN,
-          ),
-        ).toBe(true);
-
-        // Clean up
-        removeListener();
-      } finally {
-        const ws = disconnectedMailpit["webSocket"];
-        disconnectedMailpit.disconnectWebSocket();
-        ws?.terminate();
-      }
-    });
-
-    test("should timeout when waitForWebSocketEvent does not receive event", async () => {
-      // Wait for an event that will never arrive (lines 1475-1482)
-      await expect(mailpit.waitForWebSocketEvent("new", 100)).rejects.toThrow(
-        "Timeout waiting",
-      );
-    });
-
-    test("should clear reconnect timer when manually calling connectWebSocket", async () => {
-      const wsMailpit = new MailpitClient(`http://${HOST}:${PORT}`, {
-        auth: {
-          username: USERNAME,
-          password: PASSWORD,
-        },
-        webSocket: {
-          maxReconnectAttempts: 3,
-          reconnectDelay: 5000, // Long delay so timer stays active
-        },
-      });
-
-      try {
-        // Connect initially
-        wsMailpit.connectWebSocket();
-        expect(
-          await waitForCondition(
-            () => wsMailpit["webSocket"]?.readyState === WebSocket.OPEN,
-          ),
-        ).toBe(true);
-
-        // Force disconnect
-        /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
-        const ws: any = wsMailpit["webSocket"];
-        if (ws && ws._socket) {
-          ws._socket.destroy();
-        }
-        /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
-
-        // Wait for timer to be set
-        expect(
-          await waitForCondition(
-            () => wsMailpit["reconnectTimer"] !== null,
-            2000,
-          ),
-        ).toBe(true);
-
-        // Manually reconnect before timer fires - this hits lines 1296-1297
-        wsMailpit.connectWebSocket();
-
-        // Wait for connection
-        expect(
-          await waitForCondition(
-            () => wsMailpit["webSocket"]?.readyState === WebSocket.OPEN,
-          ),
-        ).toBe(true);
-
-        // Verify timer was cleared
-        expect(wsMailpit["reconnectTimer"]).toBeNull();
-      } finally {
-        // Use terminate() for immediate cleanup in tests
-        wsMailpit["webSocket"]?.terminate();
-        wsMailpit["webSocket"] = null;
-      }
-    });
-
-    test("should clear reconnect timer when disconnecting during reconnection", async () => {
-      const wsMailpit = new MailpitClient(`http://${HOST}:${PORT}`, {
-        auth: {
-          username: USERNAME,
-          password: PASSWORD,
-        },
-        webSocket: {
-          maxReconnectAttempts: 3,
-          reconnectDelay: 5000, // Long delay so timer stays active
-        },
-      });
-
-      // Connect initially
-      wsMailpit.connectWebSocket();
-      expect(
-        await waitForCondition(
-          () => wsMailpit["webSocket"]?.readyState === WebSocket.OPEN,
-        ),
-      ).toBe(true);
-
-      // Force disconnect
-      /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
-      const wsForDestroy: any = wsMailpit["webSocket"];
-      if (wsForDestroy && wsForDestroy._socket) {
-        wsForDestroy._socket.destroy();
-      }
-      /* eslint-enable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
-
-      // Wait for timer to be set
-      expect(
-        await waitForCondition(
-          () => wsMailpit["reconnectTimer"] !== null,
-          2000,
-        ),
-      ).toBe(true);
-
-      // Disconnect while timer is active - this hits lines 1377-1378
-      wsMailpit.disconnectWebSocket();
-
-      // Verify timer was cleared
-      expect(wsMailpit["reconnectTimer"]).toBeNull();
-      expect(wsMailpit["shouldReconnect"]).toBe(false);
-      // Socket is already null from disconnectWebSocket() call above
-    });
-
-    test("should properly disconnect and clean up WebSocket", async () => {
-      const wsMailpit = new MailpitClient(`http://${HOST}:${PORT}`, {
-        auth: {
-          username: USERNAME,
-          password: PASSWORD,
-        },
-      });
-
-      try {
-        // Connect
-        wsMailpit.connectWebSocket();
-        expect(
-          await waitForCondition(
-            () => wsMailpit["webSocket"]?.readyState === WebSocket.OPEN,
-          ),
-        ).toBe(true);
-
-        // Save reference before disconnecting
-        const ws = wsMailpit["webSocket"];
-
-        // Disconnect
-        wsMailpit.disconnectWebSocket();
-
-        // Verify immediate cleanup
-        expect(wsMailpit["webSocket"]).toBeNull();
-        expect(wsMailpit["shouldReconnect"]).toBe(false);
-        expect(wsMailpit["reconnectTimer"]).toBeNull();
-
-        // Terminate the saved socket reference
-        ws?.terminate();
-      } finally {
-        // Ensure cleanup even if test fails
-        const ws = wsMailpit["webSocket"];
-        wsMailpit.disconnectWebSocket();
-        ws?.terminate();
-      }
+      // Clean up
+      await mailpit.deleteMessages({ IDs: [sendResponse.ID] });
+      removeListener();
     });
   });
 });
