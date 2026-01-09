@@ -251,4 +251,58 @@ describe("MailpitClient", () => {
     const listeners = internalClient.eventListeners.get("new");
     expect(listeners?.size || 0).toBe(0);
   });
+
+  test("waitForWebSocketEvent() should not timeout when passed Infinity", async () => {
+    const internalClient = client as unknown as {
+      waitForWebSocketEvent: (
+        eventType: string,
+        timeout?: number,
+      ) => Promise<{ Type: string; Data: unknown }>;
+      eventListeners: Map<
+        string,
+        Set<(event: { Type: string; Data: unknown }) => void>
+      >;
+      handleWebSocketMessage: (message: {
+        Type: string;
+        Data: unknown;
+      }) => void;
+    };
+
+    // Spy on the method and wrap it to provide a short default timeout
+    const originalMethod =
+      internalClient.waitForWebSocketEvent.bind(internalClient);
+    const spy = jest.fn((eventType: string, timeout: number = 50) => {
+      return originalMethod(eventType, timeout);
+    });
+    internalClient.waitForWebSocketEvent = spy;
+
+    // Pass Infinity explicitly - message arrives at 100ms
+    // The spy has a default timeout of 50ms, so if Infinity wasn't respected,
+    // this test would fail with a timeout error at 50ms before the message arrives at 100ms
+    const promise = internalClient.waitForWebSocketEvent("new", Infinity);
+
+    // Verify the method was called with Infinity
+    expect(spy).toHaveBeenCalledWith("new", Infinity);
+
+    // Verify listener was added
+    const listeners = internalClient.eventListeners.get("new");
+    expect(listeners?.size).toBe(1);
+
+    // Simulate a message arriving after 100ms
+    // This is longer than the 50ms default - proves Infinity disabled the timeout
+    setTimeout(() => {
+      internalClient.handleWebSocketMessage({
+        Type: "new",
+        Data: { ID: "test-123" },
+      });
+    }, 100);
+
+    const result = await promise;
+
+    expect(result.Type).toBe("new");
+    expect(result.Data).toEqual({ ID: "test-123" });
+
+    // Verify listener was cleaned up after resolution
+    expect(internalClient.eventListeners.get("new")?.size || 0).toBe(0);
+  });
 });

@@ -448,14 +448,6 @@ export interface MailpitAttachmentDataResponse {
   contentType: string;
 }
 
-/** WebSocket event message containing a type and data payload */
-export interface MailpitWebSocketEvent<T = unknown> {
-  /** Type of event being broadcast */
-  Type: string;
-  /** Event data payload */
-  Data: T;
-}
-
 /** Message summary data structure returned in WebSocket "new" events */
 export type MailpitWebSocketMessageSummary = MailpitMessageListItem;
 
@@ -483,6 +475,34 @@ export interface MailpitWebSocketUpdateData {
 export interface MailpitWebSocketDeleteData {
   /** Message database ID */
   ID: string;
+}
+
+/** Error data structure returned in WebSocket "error" events */
+export interface MailpitWebSocketErrorData {
+  /** Error severity level */
+  Level: string;
+  /** Error type */
+  Type: string;
+  /** Client IP address */
+  IP: string;
+  /** Error message */
+  Message: string;
+}
+
+/** WebSocket event message containing a type and data payload */
+export interface MailpitWebSocketEvent<
+  T =
+    | MailpitWebSocketMessageSummary
+    | MailpitWebSocketStatsData
+    | MailpitWebSocketUpdateData
+    | MailpitWebSocketDeleteData
+    | MailpitWebSocketErrorData
+    | null,
+> {
+  /** Type of event being broadcast */
+  Type: string;
+  /** Event data payload */
+  Data: T;
 }
 
 /** WebSocket event for new messages */
@@ -519,18 +539,6 @@ export interface MailpitWebSocketPruneEvent
 export interface MailpitWebSocketTruncateEvent
   extends MailpitWebSocketEvent<null> {
   Type: "truncate";
-}
-
-/** Error data structure returned in WebSocket "error" events */
-export interface MailpitWebSocketErrorData {
-  /** Error severity level */
-  Level: string;
-  /** Error type */
-  Type: string;
-  /** Client IP address */
-  IP: string;
-  /** Error message */
-  Message: string;
 }
 
 /** WebSocket event for client errors (SMTP/POP3 errors) */
@@ -1231,15 +1239,71 @@ export class MailpitClient {
     });
 
     this.webSocket.addEventListener("message", (event) => {
+      let message: MailpitWebSocketEvent;
       try {
-        const message: MailpitWebSocketEvent = JSON.parse(
-          event.data as string,
-        ) as MailpitWebSocketEvent;
-        this.handleWebSocketMessage(message);
+        message = JSON.parse(event.data as string) as MailpitWebSocketEvent;
       } catch {
-        // Silently ignore parse errors
+        // Silently ignore malformed messages from server
+        return;
       }
+      this.handleWebSocketMessage(message);
     });
+  }
+
+  /**
+   * @internal
+   * Adds a listener to the event listeners map.
+   * @param eventType - The type of event to listen for
+   * @param listener - The listener function to add
+   */
+  private addListener(
+    eventType: string,
+    listener: (event: MailpitWebSocketEvent) => void,
+  ): void {
+    if (!this.eventListeners.has(eventType)) {
+      this.eventListeners.set(eventType, new Set());
+    }
+    const listeners = this.eventListeners.get(eventType);
+    if (listeners) {
+      listeners.add(listener);
+    }
+  }
+
+  /**
+   * @internal
+   * Removes a listener from the event listeners map.
+   * @param eventType - The type of event to remove the listener from
+   * @param listener - The listener function to remove
+   */
+  private removeListener(
+    eventType: string,
+    listener: (event: MailpitWebSocketEvent) => void,
+  ): void {
+    const listeners = this.eventListeners.get(eventType);
+    if (listeners) {
+      listeners.delete(listener);
+      if (listeners.size === 0) {
+        this.eventListeners.delete(eventType);
+      }
+    }
+  }
+
+  /**
+   * @internal
+   * Dispatches a message to listeners of a specific event type.
+   * @param eventType - The event type to dispatch to
+   * @param message - The WebSocket message
+   */
+  private dispatchToListeners(
+    eventType: string,
+    message: MailpitWebSocketEvent,
+  ): void {
+    const listeners = this.eventListeners.get(eventType);
+    if (listeners) {
+      listeners.forEach((listener) => {
+        listener(message);
+      });
+    }
   }
 
   /**
@@ -1248,21 +1312,8 @@ export class MailpitClient {
    * @param message - The WebSocket message
    */
   private handleWebSocketMessage(message: MailpitWebSocketEvent): void {
-    // Dispatch to specific event type listeners
-    const listeners = this.eventListeners.get(message.Type);
-    if (listeners) {
-      listeners.forEach((listener) => {
-        listener(message);
-      });
-    }
-
-    // Dispatch to wildcard listeners only if they exist
-    const wildcardListeners = this.eventListeners.get("*");
-    if (wildcardListeners) {
-      wildcardListeners.forEach((listener) => {
-        listener(message);
-      });
-    }
+    this.dispatchToListeners(message.Type, message);
+    this.dispatchToListeners("*", message);
   }
 
   /**
@@ -1301,32 +1352,28 @@ export class MailpitClient {
    * });
    * ```
    */
-  public onWebSocketEvent<T = unknown>(
-    eventType: MailpitWebSocketEventType,
-    listener: (event: MailpitWebSocketEvent<T>) => void,
+  public onWebSocketEvent<T extends keyof MailpitWebSocketEventMap>(
+    eventType: T,
+    listener: (event: MailpitWebSocketEventMap[T]) => void,
   ): () => void {
-    // Auto-connect if not connected
-    if (!this.webSocket) {
+    if (
+      !this.webSocket ||
+      this.webSocket.readyState === ReconnectingWebSocket.CLOSED
+    ) {
       this.connectWebSocket();
     }
 
-    if (!this.eventListeners.has(eventType)) {
-      this.eventListeners.set(eventType, new Set());
-    }
-    const listeners = this.eventListeners.get(eventType);
-    if (listeners) {
-      listeners.add(listener as (event: MailpitWebSocketEvent) => void);
-    }
+    this.addListener(
+      eventType,
+      listener as (event: MailpitWebSocketEvent) => void,
+    );
 
-    // Return unsubscribe function
+    // Return function to unregister the listener
     return () => {
-      const listeners = this.eventListeners.get(eventType);
-      if (listeners) {
-        listeners.delete(listener as (event: MailpitWebSocketEvent) => void);
-        if (listeners.size === 0) {
-          this.eventListeners.delete(eventType);
-        }
-      }
+      this.removeListener(
+        eventType,
+        listener as (event: MailpitWebSocketEvent) => void,
+      );
     };
   }
 
@@ -1334,7 +1381,7 @@ export class MailpitClient {
    * Waits for the next WebSocket event of a specific type.
    * @remarks Automatically connects to the WebSocket if not already connected. Primarily intended for testing scenarios.
    * @param eventType - The type of event to wait for (e.g., "new" for new messages)
-   * @param timeout - Optional timeout in milliseconds (default: 5000ms)
+   * @param timeout - Optional timeout in milliseconds (default: 5000ms). Pass `Infinity` to disable timeout.
    * @returns A promise that resolves with the event when received, or rejects on timeout
    * @example
    * ```typescript
@@ -1352,12 +1399,16 @@ export class MailpitClient {
    * const event = await eventPromise;
    * console.log("Message received:", event.Data.Subject);
    * ```
+   * @example Disable timeout
+   * ```typescript
+   * // Wait indefinitely for an event
+   * const event = await mailpit.waitForWebSocketEvent("new", Infinity);
+   * ```
    */
   public waitForWebSocketEvent<T extends keyof MailpitWebSocketEventMap>(
     eventType: T,
     timeout: number = 5_000,
   ): Promise<MailpitWebSocketEventMap[T]> {
-    // Ensure WebSocket is connected or connecting
     if (
       !this.webSocket ||
       this.webSocket.readyState === ReconnectingWebSocket.CLOSED
@@ -1367,43 +1418,37 @@ export class MailpitClient {
 
     return new Promise((resolve, reject) => {
       let resolved = false;
+      let timer: NodeJS.Timeout | null = null;
 
-      const timer = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          // Remove listener
-          const listeners = this.eventListeners.get(eventType);
-          if (listeners) {
-            listeners.delete(listener);
-          }
-          reject(
-            new Error(
-              `Timeout waiting for WebSocket event of type "${eventType}"`,
-            ),
-          );
+      const cleanup = () => {
+        if (timer) {
+          clearTimeout(timer);
         }
-      }, timeout);
+        this.removeListener(eventType, listener);
+      };
 
       const listener = (event: MailpitWebSocketEvent) => {
         if (!resolved) {
           resolved = true;
-          clearTimeout(timer);
-          // Remove listener
-          const listeners = this.eventListeners.get(eventType);
-          if (listeners) {
-            listeners.delete(listener);
-          }
+          cleanup();
           resolve(event as MailpitWebSocketEventMap[T]);
         }
       };
 
-      // Add listener
-      if (!this.eventListeners.has(eventType)) {
-        this.eventListeners.set(eventType, new Set());
-      }
-      const listeners = this.eventListeners.get(eventType);
-      if (listeners) {
-        listeners.add(listener);
+      this.addListener(eventType, listener);
+
+      if (isFinite(timeout)) {
+        timer = setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            cleanup();
+            reject(
+              new Error(
+                `Timeout waiting for WebSocket event of type "${eventType}"`,
+              ),
+            );
+          }
+        }, timeout);
       }
     });
   }
