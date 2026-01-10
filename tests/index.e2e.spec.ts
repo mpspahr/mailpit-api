@@ -4,7 +4,7 @@ import { describe, test, expect, afterAll, afterEach } from "@jest/globals";
 import {
   MailpitClient,
   MailpitConfigurationResponse,
-  MailpitWebSocketEvent,
+  MailpitEvent,
   type MailpitSendRequest,
 } from "../src/index";
 import dotenv from "dotenv";
@@ -109,14 +109,14 @@ describe("MailpitClient E2E Tests", () => {
   };
 
   afterAll(async () => {
-    mailpit.disconnectWebSocket();
+    mailpit.disconnect();
     await mailpit.deleteMessages();
   });
 
   test("sendMessage() should send message and trigger WebSocket events", async () => {
     // Set up WebSocket event promises before action
-    const newEventPromise = mailpit.waitForWebSocketEvent("new");
-    const statsEventPromise = mailpit.waitForWebSocketEvent("stats");
+    const newEventPromise = mailpit.waitForEvent("new");
+    const statsEventPromise = mailpit.waitForEvent("stats");
 
     const sendResponse = await mailpit.sendMessage(sendRequest);
     expect(sendResponse).toEqual({
@@ -281,8 +281,8 @@ describe("MailpitClient E2E Tests", () => {
 
     test("setReadStatus() should update the read status of a message and trigger WebSocket events", async () => {
       // Set up WebSocket event promises before action
-      const updateEventPromise = mailpit.waitForWebSocketEvent("update");
-      const statsEventPromise = mailpit.waitForWebSocketEvent("stats");
+      const updateEventPromise = mailpit.waitForEvent("update");
+      const statsEventPromise = mailpit.waitForEvent("stats");
 
       const response = await mailpit.setReadStatus({
         IDs: [messageId],
@@ -437,7 +437,7 @@ describe("MailpitClient E2E Tests", () => {
     });
     test("setTags() should set tags for a message and trigger WebSocket events", async () => {
       // Set up WebSocket event promises before action
-      const updateEventPromise = mailpit.waitForWebSocketEvent("update");
+      const updateEventPromise = mailpit.waitForEvent("update");
 
       const response = await mailpit.setTags({
         IDs: [messageId],
@@ -533,8 +533,8 @@ describe("MailpitClient E2E Tests", () => {
       };
 
       // Set up WebSocket event promises before action
-      const deleteEventPromise = mailpit.waitForWebSocketEvent("delete");
-      const statsEventPromise = mailpit.waitForWebSocketEvent("stats");
+      const deleteEventPromise = mailpit.waitForEvent("delete");
+      const statsEventPromise = mailpit.waitForEvent("stats");
 
       const response = await mailpit.deleteMessagesBySearch(searchRequest);
       expect(response).toBe("ok");
@@ -557,8 +557,8 @@ describe("MailpitClient E2E Tests", () => {
 
     test("deleteMessages() w/ID should delete a message and trigger WebSocket events", async () => {
       // Set up WebSocket event promises before action
-      const deleteEventPromise = mailpit.waitForWebSocketEvent("delete");
-      const statsEventPromise = mailpit.waitForWebSocketEvent("stats");
+      const deleteEventPromise = mailpit.waitForEvent("delete");
+      const statsEventPromise = mailpit.waitForEvent("stats");
 
       const response = await mailpit.deleteMessages({ IDs: [messageId] });
       expect(response).toBe("ok");
@@ -581,8 +581,8 @@ describe("MailpitClient E2E Tests", () => {
 
     test("deleteMessages() w/o ID should delete all messages and trigger WebSocket events", async () => {
       // Set up WebSocket event promise before action
-      const truncateEventPromise = mailpit.waitForWebSocketEvent("truncate");
-      const statsEventPromise = mailpit.waitForWebSocketEvent("stats");
+      const truncateEventPromise = mailpit.waitForEvent("truncate");
+      const statsEventPromise = mailpit.waitForEvent("stats");
 
       // Delete all messages
       const response = await mailpit.deleteMessages();
@@ -631,9 +631,9 @@ describe("MailpitClient E2E Tests", () => {
   });
 
   describe("WebSocket Behavior", () => {
-    test("should handle waitForWebSocketEvent with wildcard '*' event type", async () => {
-      const events: MailpitWebSocketEvent[] = [];
-      const removeListener = mailpit.onWebSocketEvent("*", (event) => {
+    test("should handle waitForEvent with wildcard '*' event type", async () => {
+      const events: MailpitEvent[] = [];
+      const removeListener = mailpit.onEvent("*", (event) => {
         events.push(event);
       });
 

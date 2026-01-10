@@ -172,21 +172,21 @@ describe("MailpitClient", () => {
     expect(internalClient.webSocket).toBe(existingWebSocket);
   });
 
-  test("disconnectWebSocket() should do nothing when no WebSocket exists", () => {
+  test("disconnect() should do nothing when no WebSocket exists", () => {
     const internalClient = client as unknown as {
-      disconnectWebSocket: () => void;
+      disconnect: () => void;
       webSocket: ReconnectingWebSocket | null;
     };
 
     internalClient.webSocket = null;
-    internalClient.disconnectWebSocket();
+    internalClient.disconnect();
 
     expect(internalClient.webSocket).toBeNull();
   });
 
-  test("onWebSocketEvent() should return unsubscribe function that removes listener", () => {
+  test("onEvent() should return unsubscribe function that removes listener", () => {
     const internalClient = client as unknown as {
-      onWebSocketEvent: (
+      onEvent: (
         eventType: string,
         listener: (event: unknown) => void,
       ) => () => void;
@@ -196,8 +196,8 @@ describe("MailpitClient", () => {
     const listener1 = jest.fn();
     const listener2 = jest.fn();
 
-    const unsubscribe1 = internalClient.onWebSocketEvent("new", listener1);
-    const unsubscribe2 = internalClient.onWebSocketEvent("new", listener2);
+    const unsubscribe1 = internalClient.onEvent("new", listener1);
+    const unsubscribe2 = internalClient.onEvent("new", listener2);
 
     expect(internalClient.eventListeners.get("new")?.size).toBe(2);
 
@@ -208,12 +208,9 @@ describe("MailpitClient", () => {
     expect(internalClient.eventListeners.has("new")).toBe(false);
   });
 
-  test("waitForWebSocketEvent() should auto-connect when WebSocket is closed", () => {
+  test("waitForEvent() should auto-connect when WebSocket is closed", () => {
     const internalClient = client as unknown as {
-      waitForWebSocketEvent: (
-        eventType: string,
-        timeout?: number,
-      ) => Promise<unknown>;
+      waitForEvent: (eventType: string, timeout?: number) => Promise<unknown>;
       webSocket: ReconnectingWebSocket | null;
     };
 
@@ -223,7 +220,7 @@ describe("MailpitClient", () => {
 
     internalClient.webSocket = closedWebSocket;
 
-    const promise = internalClient.waitForWebSocketEvent("new", 100);
+    const promise = internalClient.waitForEvent("new", 100);
 
     expect(internalClient.webSocket).not.toBe(closedWebSocket);
     expect(internalClient.webSocket).not.toBeNull();
@@ -232,19 +229,16 @@ describe("MailpitClient", () => {
     promise.catch(() => {});
   });
 
-  test("waitForWebSocketEvent() should timeout and remove listener", async () => {
+  test("waitForEvent() should timeout and remove listener", async () => {
     const internalClient = client as unknown as {
-      waitForWebSocketEvent: (
-        eventType: string,
-        timeout?: number,
-      ) => Promise<unknown>;
+      waitForEvent: (eventType: string, timeout?: number) => Promise<unknown>;
       eventListeners: Map<string, Set<(event: unknown) => void>>;
     };
 
-    const promise = internalClient.waitForWebSocketEvent("new", 50);
+    const promise = internalClient.waitForEvent("new", 50);
 
     await expect(promise).rejects.toThrow(
-      'Timeout waiting for WebSocket event of type "new"',
+      'Timeout waiting for event of type "new"',
     );
 
     // Verify listener was cleaned up (Set should be empty)
@@ -252,9 +246,9 @@ describe("MailpitClient", () => {
     expect(listeners?.size || 0).toBe(0);
   });
 
-  test("waitForWebSocketEvent() should not timeout when passed Infinity", async () => {
+  test("waitForEvent() should not timeout when passed Infinity", async () => {
     const internalClient = client as unknown as {
-      waitForWebSocketEvent: (
+      waitForEvent: (
         eventType: string,
         timeout?: number,
       ) => Promise<{ Type: string; Data: unknown }>;
@@ -269,17 +263,16 @@ describe("MailpitClient", () => {
     };
 
     // Spy on the method and wrap it to provide a short default timeout
-    const originalMethod =
-      internalClient.waitForWebSocketEvent.bind(internalClient);
+    const originalMethod = internalClient.waitForEvent.bind(internalClient);
     const spy = jest.fn((eventType: string, timeout: number = 50) => {
       return originalMethod(eventType, timeout);
     });
-    internalClient.waitForWebSocketEvent = spy;
+    internalClient.waitForEvent = spy;
 
     // Pass Infinity explicitly - message arrives at 100ms
     // The spy has a default timeout of 50ms, so if Infinity wasn't respected,
     // this test would fail with a timeout error at 50ms before the message arrives at 100ms
-    const promise = internalClient.waitForWebSocketEvent("new", Infinity);
+    const promise = internalClient.waitForEvent("new", Infinity);
 
     // Verify the method was called with Infinity
     expect(spy).toHaveBeenCalledWith("new", Infinity);
