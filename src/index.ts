@@ -506,8 +506,7 @@ export interface MailpitEvent<
 }
 
 /** Event for new messages */
-export interface MailpitNewMessageEvent
-  extends MailpitEvent<MailpitMessageSummary> {
+export interface MailpitNewMessageEvent extends MailpitEvent<MailpitMessageSummary> {
   Type: "new";
 }
 
@@ -1400,11 +1399,6 @@ export class MailpitClient {
    * const event = await eventPromise;
    * // event.Data is fully typed as MailpitMessageSummary
    * console.log("Message received:", event.Data.Subject);
-   * ```
-   * @example Disable timeout
-   * ```typescript
-   * // Wait indefinitely for an event
-   * const event = await mailpit.waitForEvent("new", Infinity);
    * ```
    */
   public waitForEvent<T extends Exclude<keyof MailpitEventMap, "*">>(
