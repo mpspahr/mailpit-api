@@ -506,8 +506,7 @@ export interface MailpitEvent<
 }
 
 /** Event for new messages */
-export interface MailpitNewMessageEvent
-  extends MailpitEvent<MailpitMessageSummary> {
+export interface MailpitNewMessageEvent extends MailpitEvent<MailpitMessageSummary> {
   Type: "new";
 }
 
