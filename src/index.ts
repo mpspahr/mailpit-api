@@ -1400,11 +1400,6 @@ export class MailpitClient {
    * // event.Data is fully typed as MailpitMessageSummary
    * console.log("Message received:", event.Data.Subject);
    * ```
-   * @example Disable timeout
-   * ```typescript
-   * // Wait indefinitely for an event
-   * const event = await mailpit.waitForEvent("new", Infinity);
-   * ```
    */
   public waitForEvent<T extends Exclude<keyof MailpitEventMap, "*">>(
     eventType: T,
