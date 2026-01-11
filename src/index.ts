@@ -3,6 +3,8 @@ import axios, {
   type AxiosResponse,
   isAxiosError,
 } from "axios";
+import { WebSocket as ReconnectingWebSocket } from "partysocket";
+import WS from "ws";
 
 // COMMON TYPES
 /** Represents a name and email address for a request. */
@@ -196,38 +198,7 @@ export interface MailpitMessageSummaryResponse {
 /** Response for the {@link MailpitClient.listMessages| listMessages()} API containing the summary of multiple messages. */
 export interface MailpitMessagesSummaryResponse {
   /** Messages */
-  messages: {
-    /** The number of attachments */
-    Attachments: number;
-    /** BCC addresses */
-    Bcc: MailpitEmailAddressResponse[];
-    /** CC addresses */
-    Cc: MailpitEmailAddressResponse[];
-    /** Created time in ISO format: 1970-01-01T00:00:00.000Z */
-    Created: string;
-    /** Sender address */
-    From: MailpitEmailAddressResponse;
-    /** Database ID */
-    ID: string;
-    /** Message ID */
-    MessageID: string;
-    /** Read status */
-    Read: boolean;
-    /** Reply-To addresses */
-    ReplyTo: MailpitEmailAddressResponse[];
-    /** Message size in bytes (total) */
-    Size: number;
-    /** Message snippet includes up to 250 characters */
-    Snippet: string;
-    /** Email subject */
-    Subject: string;
-    /** Message tags */
-    Tags: string[];
-    /** To addresses */
-    To: MailpitEmailAddressResponse[];
-    /** Username used for authentication (if provided) with the SMTP or {@link MailpitClient.sendMessage| sendMessage} */
-    Username?: string;
-  }[];
+  messages: MailpitMessageListItem[];
   /** Total number of messages matching the current query */
   messages_count: number;
   /** Total number of unread messages matching current query */
@@ -242,6 +213,40 @@ export interface MailpitMessagesSummaryResponse {
   unread: number;
   /** @deprecated No longer documented upstream */
   count: number;
+}
+
+/** Represents a message item in a list or WebSocket event */
+export interface MailpitMessageListItem {
+  /** The number of attachments */
+  Attachments: number;
+  /** BCC addresses */
+  Bcc: MailpitEmailAddressResponse[];
+  /** CC addresses */
+  Cc: MailpitEmailAddressResponse[];
+  /** Created time in ISO format: 1970-01-01T00:00:00.000Z */
+  Created: string;
+  /** Sender address */
+  From: MailpitEmailAddressResponse;
+  /** Database ID */
+  ID: string;
+  /** Message ID */
+  MessageID: string;
+  /** Read status */
+  Read: boolean;
+  /** Reply-To addresses */
+  ReplyTo: MailpitEmailAddressResponse[];
+  /** Message size in bytes (total) */
+  Size: number;
+  /** Message snippet includes up to 250 characters */
+  Snippet: string;
+  /** Email subject */
+  Subject: string;
+  /** Message tags */
+  Tags: string[];
+  /** To addresses */
+  To: MailpitEmailAddressResponse[];
+  /** Username used for authentication (if provided) with the SMTP or {@link MailpitClient.sendMessage| sendMessage} */
+  Username?: string;
 }
 
 /** Response for the {@link MailpitClient.getMessageHeaders | getMessageHeaders()} API containing message headers */
@@ -443,6 +448,115 @@ export interface MailpitAttachmentDataResponse {
   contentType: string;
 }
 
+/** Message summary data structure returned in "new" events */
+export type MailpitMessageSummary = MailpitMessageListItem;
+
+/** Statistics data structure returned in "stats" events */
+export interface MailpitStatsData {
+  /** Total number of messages in the database */
+  Total: number;
+  /** Total number of unread messages */
+  Unread: number;
+  /** Mailpit version */
+  Version: string;
+}
+
+/** Update data structure returned in "update" events */
+export interface MailpitUpdateData {
+  /** Message database ID */
+  ID: string;
+  /** Read status (if changed) */
+  Read?: boolean;
+  /** Tags (if changed) */
+  Tags?: string[];
+}
+
+/** Delete data structure returned in "delete" events */
+export interface MailpitDeleteData {
+  /** Message database ID */
+  ID: string;
+}
+
+/** Error data structure returned in "error" events */
+export interface MailpitErrorData {
+  /** Error severity level */
+  Level: string;
+  /** Error type */
+  Type: string;
+  /** Client IP address */
+  IP: string;
+  /** Error message */
+  Message: string;
+}
+
+/** Event message containing a type and data payload */
+export interface MailpitEvent<
+  T =
+    | MailpitMessageSummary
+    | MailpitStatsData
+    | MailpitUpdateData
+    | MailpitDeleteData
+    | MailpitErrorData
+    | null,
+> {
+  /** Type of event being broadcast */
+  Type: string;
+  /** Event data payload */
+  Data: T;
+}
+
+/** Event for new messages */
+export interface MailpitNewMessageEvent
+  extends MailpitEvent<MailpitMessageSummary> {
+  Type: "new";
+}
+
+/** Event for statistics updates */
+export interface MailpitStatsEvent extends MailpitEvent<MailpitStatsData> {
+  Type: "stats";
+}
+
+/** Event for message updates */
+export interface MailpitUpdateEvent extends MailpitEvent<MailpitUpdateData> {
+  Type: "update";
+}
+
+/** Event for message deletion */
+export interface MailpitDeleteEvent extends MailpitEvent<MailpitDeleteData> {
+  Type: "delete";
+}
+
+/** Event for database pruning (Data is null) */
+export interface MailpitPruneEvent extends MailpitEvent<null> {
+  Type: "prune";
+}
+
+/** Event for truncating all messages (Data is null) */
+export interface MailpitTruncateEvent extends MailpitEvent<null> {
+  Type: "truncate";
+}
+
+/** Event for client errors (SMTP/POP3 errors) */
+export interface MailpitErrorEvent extends MailpitEvent<MailpitErrorData> {
+  Type: "error";
+}
+
+/** Maps event type strings to their corresponding event interfaces */
+export interface MailpitEventMap {
+  new: MailpitNewMessageEvent;
+  stats: MailpitStatsEvent;
+  update: MailpitUpdateEvent;
+  delete: MailpitDeleteEvent;
+  prune: MailpitPruneEvent;
+  truncate: MailpitTruncateEvent;
+  error: MailpitErrorEvent;
+  /** Wildcard event type that matches all events */
+  "*": MailpitEvent;
+}
+
+/** Valid event types including specific event names and the wildcard "*" */
+export type MailpitEventType = keyof MailpitEventMap;
+
 /**
  * Client for interacting with the {@link https://mailpit.axllent.org/docs/api-v1/ | Mailpit API}.
  * @example
@@ -454,6 +568,11 @@ export interface MailpitAttachmentDataResponse {
  */
 export class MailpitClient {
   private readonly axiosInstance: AxiosInstance;
+  private readonly baseURL: string;
+  private readonly wsURL: string;
+  private webSocket: ReconnectingWebSocket | null = null;
+  private eventListeners: Map<string, Set<(event: MailpitEvent) => void>> =
+    new Map();
 
   /**
    * Creates an instance of {@link MailpitClient}.
@@ -468,12 +587,21 @@ export class MailpitClient {
    * @example Basic Auth
    * ```typescript
    * const mailpit = new MailpitClient("http://localhost:8025", {
-   *  username: "admin",
-   *  password: "supersecret",
+   *   username: "admin",
+   *   password: "supersecret"
    * });
    * ```
    */
   constructor(baseURL: string, auth?: { username: string; password: string }) {
+    if (!baseURL || !/^https?:\/\//.test(baseURL)) {
+      throw new Error(
+        "The value of the 'baseURL' parameter must start with http:// or https://",
+      );
+    }
+
+    this.baseURL = baseURL;
+    this.wsURL = `${baseURL.replace(/^http/, "ws")}/api/events`;
+
     this.axiosInstance = axios.create({
       baseURL,
       auth,
@@ -1070,5 +1198,249 @@ export class MailpitClient {
     return await this.handleRequest(() =>
       this.axiosInstance.get<string>(`/view/${id}.txt`),
     );
+  }
+
+  /**
+   * @internal
+   * Connects to the WebSocket endpoint for receiving real-time events.
+   */
+  private connectWebSocket(): void {
+    // Return if already connected or connecting
+    if (
+      this.webSocket &&
+      (this.webSocket.readyState === ReconnectingWebSocket.OPEN ||
+        this.webSocket.readyState === ReconnectingWebSocket.CONNECTING)
+    ) {
+      return;
+    }
+
+    // Create options for WebSocket with auth headers
+    const wsOptions: WS.ClientOptions = {};
+    if (this.axiosInstance.defaults.auth) {
+      wsOptions.headers = {
+        Authorization: `Basic ${Buffer.from(`${this.axiosInstance.defaults.auth.username}:${this.axiosInstance.defaults.auth.password}`).toString("base64")}`,
+      };
+    }
+
+    // Wrap WS to inject auth headers into the WebSocket constructor
+    class AuthenticatedWebSocket extends WS {
+      constructor(address: string, options?: WS.ClientOptions) {
+        super(address, { ...wsOptions, ...options });
+      }
+    }
+
+    this.webSocket = new ReconnectingWebSocket(this.wsURL, undefined, {
+      WebSocket: AuthenticatedWebSocket,
+    });
+
+    this.webSocket.addEventListener("message", (event) => {
+      let message: MailpitEvent;
+      try {
+        message = JSON.parse(event.data as string) as MailpitEvent;
+      } catch {
+        // Silently ignore malformed messages from server
+        return;
+      }
+      this.handleWebSocketMessage(message);
+    });
+  }
+
+  /**
+   * @internal
+   * Adds a listener to the event listeners map.
+   * @param eventType - The type of event to listen for
+   * @param listener - The listener function to add
+   */
+  private addListener(
+    eventType: string,
+    listener: (event: MailpitEvent) => void,
+  ): void {
+    if (!this.eventListeners.has(eventType)) {
+      this.eventListeners.set(eventType, new Set());
+    }
+    this.eventListeners.get(eventType)?.add(listener);
+  }
+
+  /**
+   * @internal
+   * Removes a listener from the event listeners map.
+   * @param eventType - The type of event to remove the listener from
+   * @param listener - The listener function to remove
+   */
+  private removeListener(
+    eventType: string,
+    listener: (event: MailpitEvent) => void,
+  ): void {
+    const listeners = this.eventListeners.get(eventType);
+    if (listeners) {
+      listeners.delete(listener);
+      if (listeners.size === 0) {
+        this.eventListeners.delete(eventType);
+      }
+    }
+  }
+
+  /**
+   * @internal
+   * Dispatches a message to listeners of a specific event type.
+   * @param eventType - The event type to dispatch to
+   * @param message - The event message
+   */
+  private dispatchToListeners(eventType: string, message: MailpitEvent): void {
+    const listeners = this.eventListeners.get(eventType);
+    if (listeners) {
+      listeners.forEach((listener) => {
+        listener(message);
+      });
+    }
+  }
+
+  /**
+   * @internal
+   * Handles incoming WebSocket messages and dispatches them to registered listeners.
+   * @param message - The event message
+   */
+  private handleWebSocketMessage(message: MailpitEvent): void {
+    this.dispatchToListeners(message.Type, message);
+    this.dispatchToListeners("*", message);
+  }
+
+  /**
+   * Disconnects from the real-time event stream.
+   * @example
+   * ```typescript
+   * mailpit.disconnect();
+   * ```
+   */
+  public disconnect(): void {
+    if (this.webSocket) {
+      const ws = this.webSocket;
+      this.webSocket = null;
+      // Close with code 1000 (normal closure) to prevent reconnection
+      ws.close(1000, "Client disconnect");
+    }
+  }
+
+  /**
+   * Registers a listener for real-time events of a specific type.
+   * @remarks
+   * Automatically connects to the event stream if not already connected.
+   * @param eventType - The type of event to listen for.
+   * Specific event types include: "new" (new messages), "stats", "update", "delete", "prune", "truncate", and "error".
+   * Use "*" to listen for all event types (Useful if processing all events uniformly (e.g., logging, debugging, metrics)).
+   * @param listener - The callback function to invoke when an event is received
+   * @returns A function to unregister the listener
+   * @example Listen for event type "new" messages (recommended)
+   * ```typescript
+   * const unsubscribe = mailpit.onEvent("new", (event) => {
+   *   // event.Data is typed as MailpitMessageSummary with full type safety
+   *   console.log("New message:", event.Data.Subject);
+   * });
+   *
+   * // Other code...
+   *
+   * // Unsubscribe listener when no longer needed
+   * unsubscribe();
+   * ```
+   * @example Listen for all events uniformly (for logging/debugging)
+   * ```typescript
+   * const unsubscribe = mailpit.onEvent("*", (event) => {
+   *   // Generic processing for all event types
+   *   console.log(`Event ${event.Type} received`);
+   * });
+   *
+   * // Other code...
+   *
+   * // Unsubscribe listener when no longer needed
+   * unsubscribe();
+   * ```
+   */
+  public onEvent<T extends keyof MailpitEventMap>(
+    eventType: T,
+    listener: (event: MailpitEventMap[T]) => void,
+  ): () => void {
+    if (
+      !this.webSocket ||
+      this.webSocket.readyState === ReconnectingWebSocket.CLOSED
+    ) {
+      this.connectWebSocket();
+    }
+
+    this.addListener(eventType, listener as (event: MailpitEvent) => void);
+
+    // Return function to unregister the listener
+    return () => {
+      this.removeListener(eventType, listener as (event: MailpitEvent) => void);
+    };
+  }
+
+  /**
+   * Waits for the next event of a specific type.
+   * @remarks
+   * Automatically connects to the event stream if not already connected.
+   * Primarily intended for testing scenarios where you need to wait for a single specific event.
+   * The promise will reject if the timeout is reached before an event is received.
+   * @param eventType - The type of event to wait for.
+   * Specific event types include: "new" (new messages), "stats", "update", "delete", "prune", "truncate", and "error".
+   * @param timeout - Timeout in milliseconds (default: 5000ms). Pass `Infinity` to disable timeout.
+   * @returns A promise that resolves with the event when received, or rejects on timeout
+   * @example Basic usage
+   * ```typescript
+   * // Create the promise before triggering the event
+   * const eventPromise = mailpit.waitForEvent("new");
+   *
+   * // Do something that triggers an email to send
+   * await mailpit.sendMessage({
+   *   From: { Email: "test@example.com" },
+   *   To: [{ Email: "recipient@example.com" }],
+   *   Subject: "Test",
+   * });
+   *
+   * // Wait for the event confirming the message was received
+   * const event = await eventPromise;
+   * // event.Data is fully typed as MailpitMessageSummary
+   * console.log("Message received:", event.Data.Subject);
+   * ```
+   * @example Disable timeout
+   * ```typescript
+   * // Wait indefinitely for an event
+   * const event = await mailpit.waitForEvent("new", Infinity);
+   * ```
+   */
+  public waitForEvent<T extends Exclude<keyof MailpitEventMap, "*">>(
+    eventType: T,
+    timeout: number = 5_000,
+  ): Promise<MailpitEventMap[T]> {
+    if (
+      !this.webSocket ||
+      this.webSocket.readyState === ReconnectingWebSocket.CLOSED
+    ) {
+      this.connectWebSocket();
+    }
+
+    return new Promise((resolve, reject) => {
+      let timer: NodeJS.Timeout | null = null;
+
+      const cleanup = () => {
+        if (timer) {
+          clearTimeout(timer);
+        }
+        this.removeListener(eventType, listener);
+      };
+
+      const listener = (event: MailpitEvent) => {
+        cleanup();
+        resolve(event as MailpitEventMap[T]);
+      };
+
+      this.addListener(eventType, listener);
+
+      if (isFinite(timeout)) {
+        timer = setTimeout(() => {
+          cleanup();
+          reject(new Error(`Timeout waiting for event of type "${eventType}"`));
+        }, timeout);
+      }
+    });
   }
 }
