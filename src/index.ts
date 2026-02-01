@@ -47,6 +47,15 @@ export interface MailpitAttachmentResponse {
   PartID: string;
   /** Size in bytes */
   Size: number;
+  /** Checksums for the attachment */
+  Checksums: {
+    /** MD5 checksum */
+    MD5: string;
+    /** SHA1 checksum */
+    SHA1: string;
+    /** SHA256 checksum */
+    SHA256: string;
+  };
 }
 
 /** Represents information about a Chaos trigger */

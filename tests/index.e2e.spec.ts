@@ -192,6 +192,11 @@ describe("MailpitClient E2E Tests", () => {
         FileName: expect.any(String),
         PartID: expect.any(String),
         Size: expect.any(Number),
+        Checksums: {
+          MD5: expect.any(String),
+          SHA1: expect.any(String),
+          SHA256: expect.any(String),
+        },
       };
       const expected = {
         Attachments: [expectedAttachment],
