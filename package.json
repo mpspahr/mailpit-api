@@ -60,7 +60,7 @@
   "author": "Matthew Spahr",
   "license": "MIT",
   "dependencies": {
-    "axios": "^1.12.1",
+    "axios": "^1.13.5",
     "partysocket": "^1.1.10",
     "ws": "^8.18.3"
   },
