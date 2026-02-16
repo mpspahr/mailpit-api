@@ -389,15 +389,20 @@ export interface MailpitSpamAssassinResponse {
   Error: string;
   /** Whether the message is spam or not */
   IsSpam: boolean;
-  /** Spam rules triggered */
-  Rules: {
-    /** SpamAssassin rule description */
-    Description: string;
-    /** SpamAssassin rule name */
-    Name: string;
-    /** Spam rule score */
-    Score: number;
-  }[];
+  /**
+   * Spam rules triggered and their score.
+   * @remarks The rules may return `null` if there is an error. Check the `Error` property for details.
+   */
+  Rules:
+    | {
+        /** SpamAssassin rule description */
+        Description: string;
+        /** SpamAssassin rule name */
+        Name: string;
+        /** Spam rule score */
+        Score: number;
+      }[]
+    | null;
   /** Total spam score based on triggered rules */
   Score: number;
 }
