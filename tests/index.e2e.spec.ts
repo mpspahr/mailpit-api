@@ -3,8 +3,9 @@ import path from "path";
 import { describe, test, expect, afterAll, afterEach } from "@jest/globals";
 import {
   MailpitClient,
-  MailpitConfigurationResponse,
-  MailpitEvent,
+  type MailpitConfigurationResponse,
+  type MailpitEvent,
+  type MailpitSpamAssassinResponse,
   type MailpitSendRequest,
 } from "../src/index";
 import dotenv from "dotenv";
@@ -417,9 +418,16 @@ describe("MailpitClient E2E Tests", () => {
         );
         return;
       }
-      const response = await mailpit.spamAssassinCheck(messageId);
-      expect(response).toEqual({
-        Error: expect.any(String),
+
+      let response: MailpitSpamAssassinResponse;
+      await waitForCondition(async () => {
+        response = await mailpit.spamAssassinCheck(messageId);
+        return response.Rules !== null;
+      }, 5000);
+
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      expect(response!).toEqual({
+        Error: "",
         IsSpam: expect.any(Boolean),
         Rules: expect.arrayContaining([
           expect.objectContaining({
@@ -661,12 +669,12 @@ describe("MailpitClient E2E Tests", () => {
 
 // Helper to wait for a condition
 async function waitForCondition(
-  condition: () => boolean,
+  condition: () => boolean | Promise<boolean>,
   timeout = 5000,
   interval = 50,
 ): Promise<boolean> {
   const startTime = Date.now();
-  while (!condition()) {
+  while (!(await condition())) {
     if (Date.now() - startTime > timeout) {
       return false;
     }
