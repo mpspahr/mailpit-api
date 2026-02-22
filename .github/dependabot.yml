@@ -1,22 +1,5 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "friday"
-      time: "21:00"
-    open-pull-requests-limit: 5
-    assignees:
-      - "mpspahr"
-    labels:
-      - "dependencies"
-    commit-message:
-      prefix: "chore(deps):"
-    versioning-strategy: widen
-    allow:
-      - dependency-type: "production"
-
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
