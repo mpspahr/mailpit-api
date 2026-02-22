@@ -13,6 +13,8 @@ on:
     secrets:
       password:
         required: true
+  schedule:
+    - cron: "0 21 * * 5" # Every Friday at 9 PM UTC
   workflow_dispatch:
     inputs:
       username:
@@ -63,10 +65,15 @@ jobs:
           cache: "npm"
           cache-dependency-path: "**/package-lock.json"
       - run: npm ci
+      - name: Update dependencies to latest
+        if: github.event_name == 'schedule'
+        run: |
+          npm update
+          npm ls --depth=0
       - name: Run All Tests
         run: npm run test
       - name: Upload coverage to Codecov
-        if: matrix.node-version == 24 &&  (github.event_name == 'pull_request' && github.actor != 'dependabot[bot]') || github.ref == 'refs/heads/main'
+        if: matrix.node-version == 24 && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
