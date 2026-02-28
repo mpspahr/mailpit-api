@@ -7,10 +7,31 @@ import {
   test,
 } from "@jest/globals";
 import axios, { AxiosInstance } from "axios";
-import { WebSocket as ReconnectingWebSocket } from "partysocket";
+import ReconnectingWebSocket from "partysocket/ws";
 import { MailpitClient } from "../src/index";
 
 jest.mock("axios");
+
+const mockWebSocketHandlers = new Map<string, ((...args: never[]) => void)[]>();
+
+jest.mock("partysocket/ws", () => {
+  const mock = Object.assign(
+    jest.fn(() => ({
+      readyState: 1,
+      addEventListener: jest.fn(
+        (event: string, handler: (...args: never[]) => void) => {
+          const handlers = mockWebSocketHandlers.get(event) ?? [];
+          handlers.push(handler);
+          mockWebSocketHandlers.set(event, handlers);
+        },
+      ),
+      removeEventListener: jest.fn(),
+      close: jest.fn(),
+    })),
+    { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 },
+  );
+  return { __esModule: true, default: mock };
+});
 
 describe("MailpitClient", () => {
   let client: MailpitClient;
@@ -66,6 +87,7 @@ describe("MailpitClient", () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    mockWebSocketHandlers.clear();
   });
 
   // Methods that could be skipped in e2e if feature not enabled
@@ -290,48 +312,19 @@ describe("MailpitClient", () => {
   });
 
   test("should silently ignore malformed JSON messages from WebSocket", () => {
-    let capturedMessageHandler: ((event: { data: string }) => void) | null =
-      null;
-
-    // Mock the WebSocket constructor to capture the message handler
-    const mockWebSocket = {
-      readyState: ReconnectingWebSocket.OPEN,
-      addEventListener: jest.fn(
-        (event: string, handler: (e: { data: string }) => void) => {
-          if (event === "message") {
-            capturedMessageHandler = handler;
-          }
-        },
-      ),
-      removeEventListener: jest.fn(),
-      close: jest.fn(),
-    };
-
-    // Mock the ReconnectingWebSocket constructor
-    const originalWebSocket = ReconnectingWebSocket;
-    (ReconnectingWebSocket as unknown as jest.Mock) = jest.fn(
-      () => mockWebSocket,
-    );
-
     const mockListener = jest.fn();
     client.onEvent("new", mockListener);
 
-    // Trigger WebSocket connection
-    internalClient.connectWebSocket();
-
-    // Verify the message handler was captured
-    expect(capturedMessageHandler).not.toBeNull();
+    // Verify the message handler was captured by the mock
+    const messageHandlers = mockWebSocketHandlers.get("message") ?? [];
+    expect(messageHandlers.length).toBeGreaterThan(0);
 
     // Call the handler with malformed JSON - this should not throw
     expect(() => {
-      capturedMessageHandler?.({ data: "{ this is not valid json }" });
+      messageHandlers[0]({ data: "{ this is not valid json }" } as never);
     }).not.toThrow();
 
     // Verify listener was never called (malformed message was silently ignored)
     expect(mockListener).not.toHaveBeenCalled();
-
-    // Restore the original WebSocket
-    (ReconnectingWebSocket as unknown as typeof originalWebSocket) =
-      originalWebSocket;
   });
 });
