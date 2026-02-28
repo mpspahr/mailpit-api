@@ -3,7 +3,7 @@ import axios, {
   type AxiosResponse,
   isAxiosError,
 } from "axios";
-import { WebSocket as ReconnectingWebSocket } from "partysocket";
+import ReconnectingWebSocket from "partysocket/ws";
 import WS from "ws";
 
 // COMMON TYPES
