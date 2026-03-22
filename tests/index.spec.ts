@@ -250,6 +250,44 @@ describe("MailpitClient", () => {
     expect(internalClient.eventListeners.has("new")).toBe(false);
   });
 
+  test("disconnect() should terminate the inner socket for clean process exit", () => {
+    const mockTerminate = jest.fn();
+
+    // Connect to create a WebSocket
+    internalClient.connectWebSocket();
+    expect(internalClient.webSocket).not.toBeNull();
+
+    // Set up _ws.terminate on the mock WebSocket
+    const ws = internalClient.webSocket as unknown as Record<string, unknown>;
+    ws._ws = { terminate: mockTerminate };
+
+    internalClient.disconnect();
+
+    expect(internalClient.webSocket).toBeNull();
+    expect(mockTerminate).toHaveBeenCalled();
+  });
+
+  test("connectWebSocket() should unref the underlying socket and timers on open", () => {
+    const mockUnref = jest.fn();
+
+    internalClient.connectWebSocket();
+
+    // Get the "open" handler registered on the mock WebSocket
+    const openHandlers = mockWebSocketHandlers.get("open") ?? [];
+    expect(openHandlers.length).toBeGreaterThan(0);
+
+    // Set up _ws._socket and timer mocks with unref
+    const ws = internalClient.webSocket as unknown as Record<string, unknown>;
+    ws._ws = { _socket: { unref: mockUnref } };
+    ws._uptimeTimeout = { unref: mockUnref };
+    ws._connectTimeout = { unref: mockUnref };
+
+    // Simulate the "open" event
+    openHandlers[0]({} as never);
+
+    expect(mockUnref).toHaveBeenCalledTimes(3);
+  });
+
   test("waitForEvent() should auto-connect when WebSocket is closed", () => {
     const closedWebSocket = {
       readyState: ReconnectingWebSocket.CLOSED,
