@@ -848,8 +848,8 @@ export class MailpitClient {
 
   /**
    * Sends a message
-   * @param sendReqest - The request containing the message details.
-   * @returns Response containing database messsage ID
+   * @param sendRequest - The request containing the message details.
+   * @returns Response containing database message ID
    * @example
    * ```typescript
    * await mailpit.sendMessage(
@@ -860,12 +860,12 @@ export class MailpitClient {
    * ```
    */
   public async sendMessage(
-    sendReqest: MailpitSendRequest,
+    sendRequest: MailpitSendRequest,
   ): Promise<MailpitSendMessageConfirmationResponse> {
     return await this.handleRequest(() =>
       this.axiosInstance.post<MailpitSendMessageConfirmationResponse>(
         `/api/v1/send`,
-        sendReqest,
+        sendRequest,
       ),
     );
   }
@@ -879,7 +879,7 @@ export class MailpitClient {
    * @returns A list of message summaries
    * @example
    * ```typescript
-   * const messages = await.listMessages();
+   * const messages = await mailpit.listMessages();
    * ```
    */
   public async listMessages(
@@ -923,7 +923,7 @@ export class MailpitClient {
    * ```
    */
   public async setReadStatus(
-    readStatus: MailpitReadStatusRequest,
+    readStatus: MailpitReadStatusRequest = {},
     params?: MailpitTimeZoneRequest,
   ): Promise<string> {
     return await this.handleRequest(() =>
@@ -1121,6 +1121,7 @@ export class MailpitClient {
    * @param tag - The name of the tag to delete.
    * @remarks This does NOT delete any messages
    * @returns Plain text "ok" response
+   * @example
    * ```typescript
    * await mailpit.deleteTag("Tag 1");
    * ```
