@@ -90,6 +90,19 @@ describe("MailpitClient", () => {
     mockWebSocketHandlers.clear();
   });
 
+  test("should call setReadStatus() with no parameters and return ok", async () => {
+    mockedAxios.put.mockResolvedValue({ data: "ok" });
+    const result = await client.setReadStatus();
+    expect(mockedAxios.put).toHaveBeenCalledWith(
+      "/api/v1/messages",
+      {},
+      {
+        params: undefined,
+      },
+    );
+    expect(result).toBe("ok");
+  });
+
   // Methods that could be skipped in e2e if feature not enabled
   test("should call releaseMessage() and return ok", async () => {
     mockedAxios.post.mockResolvedValue({ data: "ok" });
