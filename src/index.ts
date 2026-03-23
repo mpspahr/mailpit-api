@@ -426,6 +426,30 @@ export interface MailpitSearchMessagesRequest extends MailpitSearchRequest {
   limit?: number;
 }
 
+/** Options for the {@link MailpitClient.waitForMessage | waitForMessage()} API. */
+export interface MailpitWaitForMessageRequest {
+  /** Maximum time to wait in milliseconds. Pass `Infinity` to disable timeout. @defaultValue 5000 */
+  timeout?: number;
+  /** Polling interval in milliseconds. @defaultValue 500 */
+  interval?: number;
+}
+
+/** Request parameters for the {@link MailpitClient.waitForMessages | waitForMessages()} API. */
+export interface MailpitWaitForMessagesRequest {
+  /** Optional {@link https://mailpit.axllent.org/docs/usage/search-filters/ | Search query}. If omitted, polls all messages. */
+  query?: string;
+  /** Pagination offset */
+  start?: number;
+  /** Limit results */
+  limit?: number;
+  /** {@link https://en.wikipedia.org/wiki/List_of_tz_database_time_zones | Timezone identifier} used only for `before:` & `after:` searches (eg: "Pacific/Auckland"). */
+  tz?: string;
+  /** Number of messages to wait for. @defaultValue 1 */
+  count?: number;
+  /** If `true`, require `messages_count === count`. If `false` (default), require `messages_count >= count`. When `count` is `0`, always uses exact match regardless of this option. @defaultValue false */
+  exact?: boolean;
+}
+
 /** Request parameters for the {@link MailpitClient.setTags | setTags()} API. */
 export interface MailpitSetTagsRequest {
   /** Array of message database IDs */
@@ -981,6 +1005,138 @@ export class MailpitClient {
   }
 
   /**
+   * Waits for at least one message matching a search query, then returns the latest matching message.
+   * @remarks
+   * Polls the {@link MailpitClient.searchMessages | searchMessages()} API at a configurable interval until at least one message is found,
+   * then retrieves the full message details via {@link MailpitClient.getMessageSummary | getMessageSummary()}.
+   * The promise will reject if the timeout is reached before a matching message is found.
+   * @see {@link https://mailpit.axllent.org/docs/usage/search-filters/ | Search filters}
+   * @param search - The search request containing the query and optional parameters.
+   * @param options - Optional timeout and interval settings.
+   * @returns The full message summary of the latest matching message.
+   * @example
+   * ```typescript
+   * // Trigger an email, then wait for it
+   * await mailpit.sendMessage({
+   *   From: { Email: "test@example.test" },
+   *   To: [{ Email: "recipient@example.test" }],
+   *   Subject: "Welcome",
+   * });
+   * const message = await mailpit.waitForMessage({ query: "subject:Welcome" });
+   * console.log(message.Subject); // "Welcome"
+   * ```
+   */
+  public async waitForMessage(
+    search: MailpitSearchMessagesRequest,
+    options?: MailpitWaitForMessageRequest,
+  ): Promise<MailpitMessageSummaryResponse> {
+    const { timeout = 5_000, interval = 500 } = { ...options };
+    const endTime = performance.now() + timeout;
+    while (performance.now() < endTime) {
+      const result = await this.searchMessages(search);
+      if (result.messages_count >= 1 && result.messages.length > 0) {
+        return this.getMessageSummary(result.messages[0].ID);
+      }
+      await new Promise((resolve) => setTimeout(resolve, interval));
+    }
+    throw new Error(
+      `Timeout waiting for messages matching query "${search.query}"`,
+    );
+  }
+
+  /**
+   * Waits for a specific number of messages to exist, optionally matching a search query.
+   * @remarks
+   * Polls the {@link MailpitClient.searchMessages | searchMessages()} (if search is provided) or
+   * {@link MailpitClient.listMessages | listMessages()} API at a configurable interval until the count condition is met.
+   * The promise will reject if the timeout is reached before the condition is satisfied.
+   *
+   * By default, resolves when `messages_count >= count`. Set `exact: true` to require `messages_count === count`.
+   * When `count` is `0`, always uses exact match (`messages_count === 0`) regardless of the `exact` option.
+   * @see {@link https://mailpit.axllent.org/docs/usage/search-filters/ | Search filters}
+   * @param request - Optional request containing an optional search query, count, and exact match settings.
+   * @param options - Optional timeout and interval settings.
+   * @returns The message list response that satisfied the count condition.
+   * @example Wait for at least two messages matching a search
+   * ```typescript
+   * const response = await mailpit.waitForMessages({ query: "to:user@example.test", count: 2 });
+   * console.log(response.messages_count); // 2 or more
+   * ```
+   * @example Wait for exactly three messages matching a search
+   * ```typescript
+   * const response = await mailpit.waitForMessages({ query: "from:example.test", count: 3, exact: true });
+   * console.log(response.messages_count); // 3
+   * ```
+   * @example Wait for an empty mailbox
+   * ```typescript
+   * await mailpit.deleteMessages();
+   * const response = await mailpit.waitForMessages({ count: 0 });
+   * console.log(response.messages_count); // 0
+   * ```
+   * @example Wait until no messages match a search query
+   * ```typescript
+   * await mailpit.deleteMessagesBySearch({ query: "from:example.test" });
+   * const response = await mailpit.waitForMessages({ query: "from:example.test", count: 0 });
+   * console.log(response.messages_count); // 0
+   * ```
+   * @example Wait for at least one message with a custom timeout and interval only
+   * ```typescript
+   * const response = await mailpit.waitForMessages({ timeout: 10_000, interval: 1_000 });
+   * console.log(response.messages_count); // 1 or more
+   * ```
+   */
+  public async waitForMessages(
+    options?: MailpitWaitForMessageRequest,
+  ): Promise<MailpitMessagesSummaryResponse>;
+  public async waitForMessages(
+    request: MailpitWaitForMessagesRequest,
+    options?: MailpitWaitForMessageRequest,
+  ): Promise<MailpitMessagesSummaryResponse>;
+  public async waitForMessages(
+    requestOrOptions?:
+      | MailpitWaitForMessagesRequest
+      | MailpitWaitForMessageRequest,
+    options?: MailpitWaitForMessageRequest,
+  ): Promise<MailpitMessagesSummaryResponse> {
+    const isOptionsOnly =
+      !requestOrOptions ||
+      "timeout" in requestOrOptions ||
+      "interval" in requestOrOptions;
+    const request = isOptionsOnly
+      ? undefined
+      : (requestOrOptions as MailpitWaitForMessagesRequest);
+    const opts = isOptionsOnly
+      ? (requestOrOptions as MailpitWaitForMessageRequest)
+      : options;
+    const {
+      query,
+      start,
+      limit,
+      tz,
+      count = 1,
+      exact = false,
+    } = { ...request };
+    const { timeout = 5_000, interval = 500 } = { ...opts };
+    const endTime = performance.now() + timeout;
+
+    const predicate: (r: MailpitMessagesSummaryResponse) => boolean =
+      count === 0 || exact
+        ? (r) => r.messages_count === count
+        : (r) => r.messages_count >= count;
+
+    while (performance.now() < endTime) {
+      const result = query
+        ? await this.searchMessages({ query, start, limit, tz })
+        : await this.listMessages(start, limit);
+      if (predicate(result)) return result;
+      await new Promise((resolve) => setTimeout(resolve, interval));
+    }
+    throw new Error(
+      `Timeout waiting for messages${query ? ` matching query "${query}"` : ""}`,
+    );
+  }
+
+  /**
    * Delete all messages matching a search.
    * @see {@link https://mailpit.axllent.org/docs/usage/search-filters/ | Search filters}
    * @param search - The search request containing the query.
@@ -1405,8 +1561,8 @@ export class MailpitClient {
    *
    * // Do something that triggers an email to send
    * await mailpit.sendMessage({
-   *   From: { Email: "test@example.com" },
-   *   To: [{ Email: "recipient@example.com" }],
+   *   From: { Email: "test@example.test" },
+   *   To: [{ Email: "recipient@example.test" }],
    *   Subject: "Test",
    * });
    *
