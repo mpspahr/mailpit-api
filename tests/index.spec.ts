@@ -48,6 +48,8 @@ describe("MailpitClient", () => {
       eventType: string,
       timeout?: number,
     ) => Promise<{ Type: string; Data: unknown }>;
+    waitForMessage: InstanceType<typeof MailpitClient>["waitForMessage"];
+    waitForMessages: InstanceType<typeof MailpitClient>["waitForMessages"];
     eventListeners: Map<
       string,
       Set<(event: { Type: string; Data: unknown }) => void>
@@ -339,5 +341,159 @@ describe("MailpitClient", () => {
 
     // Verify listener was never called (malformed message was silently ignored)
     expect(mockListener).not.toHaveBeenCalled();
+  });
+
+  // Mock response for message list polling
+  const mockEmptyMessages = {
+    messages: [],
+    messages_count: 0,
+    messages_unread: 0,
+    start: 0,
+    tags: [],
+    total: 0,
+    unread: 0,
+    count: 0,
+  };
+
+  const mockMessagesWithCount = (count: number) => ({
+    messages: Array.from({ length: count }, (_, i) => ({
+      ID: `msg-${String(i + 1)}`,
+      Subject: `Message ${String(i + 1)}`,
+    })),
+    messages_count: count,
+    messages_unread: count,
+    start: 0,
+    tags: [],
+    total: count,
+    unread: count,
+    count,
+  });
+
+  const mockFullMessage = {
+    ID: "msg-1",
+    Subject: "Test",
+    From: { Email: "test@example.test", Name: "Test" },
+    To: [{ Email: "recipient@example.test", Name: "Recipient" }],
+    HTML: "<p>Hello</p>",
+    Text: "Hello",
+  };
+
+  test("waitForMessage() should poll until a message appears", async () => {
+    mockedAxios.get
+      .mockResolvedValueOnce({ data: mockEmptyMessages }) // first poll: no messages
+      .mockResolvedValueOnce({ data: mockMessagesWithCount(1) }) // second poll: found
+      .mockResolvedValueOnce({ data: mockFullMessage }); // getMessageSummary
+
+    const result = await internalClient.waitForMessage({
+      query: "subject:Test",
+    });
+
+    expect(mockedAxios.get).toHaveBeenCalledWith("/api/v1/search", {
+      params: { query: "subject:Test" },
+    });
+    expect(mockedAxios.get).toHaveBeenCalledWith("/api/v1/message/msg-1");
+    expect(mockedAxios.get).toHaveBeenCalledTimes(3);
+    expect(result).toEqual(mockFullMessage);
+  });
+
+  test("waitForMessage() should timeout when no messages match", async () => {
+    mockedAxios.get.mockResolvedValue({ data: mockEmptyMessages });
+
+    await expect(
+      internalClient.waitForMessage(
+        { query: "subject:NonExistent" },
+        { timeout: 150, interval: 50 },
+      ),
+    ).rejects.toThrow(
+      'Timeout waiting for messages matching query "subject:NonExistent"',
+    );
+  });
+
+  test("waitForMessages() should use listMessages() by default and resolve when condition met", async () => {
+    mockedAxios.get.mockResolvedValueOnce({ data: mockMessagesWithCount(1) });
+
+    const result = await internalClient.waitForMessages();
+
+    expect(result.messages_count).toBe(1);
+    expect(mockedAxios.get).toHaveBeenCalledWith("/api/v1/messages", {
+      params: { start: 0, limit: 50 },
+    });
+  });
+
+  test("waitForMessages() should use searchMessages() when search provided", async () => {
+    mockedAxios.get.mockResolvedValueOnce({ data: mockMessagesWithCount(1) });
+
+    await internalClient.waitForMessages(
+      { query: "from:test@example.test" },
+      { timeout: 1000, interval: 50 },
+    );
+
+    expect(mockedAxios.get).toHaveBeenCalledWith("/api/v1/search", {
+      params: { query: "from:test@example.test" },
+    });
+  });
+
+  test("waitForMessages() with exact: true or count: 0 should require exact count", async () => {
+    // exact: true — skips count=3 (too many), resolves on count=2
+    mockedAxios.get
+      .mockResolvedValueOnce({ data: mockMessagesWithCount(3) })
+      .mockResolvedValueOnce({ data: mockMessagesWithCount(2) });
+
+    const exactResult = await internalClient.waitForMessages(
+      { count: 2, exact: true },
+      { timeout: 1000, interval: 50 },
+    );
+    expect(exactResult.messages_count).toBe(2);
+    expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+
+    jest.clearAllMocks();
+
+    // count: 0 — skips non-empty, resolves when empty
+    mockedAxios.get
+      .mockResolvedValueOnce({ data: mockMessagesWithCount(1) })
+      .mockResolvedValueOnce({ data: mockEmptyMessages });
+
+    const zeroResult = await internalClient.waitForMessages(
+      { count: 0 },
+      { timeout: 1000, interval: 50 },
+    );
+    expect(zeroResult.messages_count).toBe(0);
+    expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+  });
+
+  test("waitForMessages() should not timeout when passed Infinity", async () => {
+    mockedAxios.get
+      .mockResolvedValueOnce({ data: mockEmptyMessages })
+      .mockResolvedValueOnce({ data: mockEmptyMessages })
+      .mockResolvedValueOnce({ data: mockMessagesWithCount(1) });
+
+    const result = await internalClient.waitForMessages({
+      timeout: Infinity,
+      interval: 50,
+    });
+
+    expect(result.messages_count).toBe(1);
+  });
+
+  test("waitForMessages() should timeout with error message including query if provided", async () => {
+    mockedAxios.get.mockResolvedValue({ data: mockMessagesWithCount(1) });
+
+    // Without query — generic timeout message
+    await expect(
+      internalClient.waitForMessages(
+        { count: 5 },
+        { timeout: 150, interval: 50 },
+      ),
+    ).rejects.toThrow("Timeout waiting for messages");
+
+    // With query — error message includes the query string
+    await expect(
+      internalClient.waitForMessages(
+        { query: "from:nobody@example.test", count: 5 },
+        { timeout: 150, interval: 50 },
+      ),
+    ).rejects.toThrow(
+      'Timeout waiting for messages matching query "from:nobody@example.test"',
+    );
   });
 });
