@@ -4,7 +4,12 @@ import axios, {
   isAxiosError,
 } from "axios";
 import ReconnectingWebSocket from "partysocket/ws";
-import WS from "ws";
+import WS from "isomorphic-ws";
+
+// In browsers, isomorphic-ws re-exports the native WebSocket directly.
+// In Node.js it exports the 'ws' package, so the comparison is false.
+const IS_NATIVE_WEBSOCKET =
+  typeof WebSocket !== "undefined" && (WS as unknown) === WebSocket;
 
 // COMMON TYPES
 /** Represents a name and email address for a request. */
@@ -614,9 +619,15 @@ export class MailpitClient {
   /**
    * Creates an instance of {@link MailpitClient}.
    * @param baseURL - The base URL of the Mailpit API.
-   * @param auth - Optional authentication credentials.
+   * @param auth - Optional authentication credentials. Used for both REST API calls and WebSocket connections.
    * @param auth.username - The username for basic authentication.
    * @param auth.password - The password for basic authentication.
+   * @remarks
+   * **Browser limitation:** When running in a browser, authentication credentials are applied to REST API calls only.
+   * The browser's native `WebSocket` API does not support custom headers, so the `Authorization` header cannot be sent
+   * with WebSocket connections. Real-time events via {@link MailpitClient.onEvent | onEvent()} and
+   * {@link MailpitClient.waitForEvent | waitForEvent()} will connect without authentication in browser environments.
+   * This limitation does **not** affect Node.js. In Node, auth headers are sent correctly for both HTTP and WebSocket connections.
    * @example No Auth
    * ```typescript
    * const mailpit = new MailpitClient("http://localhost:8025");
@@ -1375,6 +1386,13 @@ export class MailpitClient {
    * Connects to the WebSocket endpoint for receiving real-time events.
    */
   private connectWebSocket(): void {
+    if (IS_NATIVE_WEBSOCKET && this.axiosInstance.defaults.auth) {
+      throw new Error(
+        "Basic authentication is not supported by the browser WebSocket API. " +
+          "Use a server-side proxy or disable authentication in Mailpit for real-time events.",
+      );
+    }
+
     // Return if already connected or connecting
     if (
       this.webSocket &&
@@ -1384,23 +1402,29 @@ export class MailpitClient {
       return;
     }
 
-    // Create options for WebSocket with auth headers
-    const wsOptions: WS.ClientOptions = {};
-    if (this.axiosInstance.defaults.auth) {
-      wsOptions.headers = {
-        Authorization: `Basic ${Buffer.from(`${this.axiosInstance.defaults.auth.username}:${this.axiosInstance.defaults.auth.password}`).toString("base64")}`,
-      };
-    }
+    // Only set in Node.js when auth credentials are provided.
+    // Browsers cannot set custom WebSocket headers, so we skip the wrapper
+    // entirely to avoid passing an options object where the native WebSocket
+    // constructor expects only an optional protocols string/array.
+    const wsOptions: WS.ClientOptions | undefined =
+      !IS_NATIVE_WEBSOCKET && this.axiosInstance.defaults.auth
+        ? {
+            headers: {
+              Authorization: `Basic ${btoa(`${this.axiosInstance.defaults.auth.username}:${this.axiosInstance.defaults.auth.password}`)}`,
+            },
+          }
+        : undefined;
 
-    // Wrap WS to inject auth headers into the WebSocket constructor
-    class AuthenticatedWebSocket extends WS {
-      constructor(address: string, options?: WS.ClientOptions) {
-        super(address, { ...wsOptions, ...options });
-      }
-    }
+    const wsConstructor = wsOptions
+      ? class AuthenticatedWebSocket extends WS {
+          constructor(address: string, options?: WS.ClientOptions) {
+            super(address, { ...wsOptions, ...options });
+          }
+        }
+      : WS;
 
     this.webSocket = new ReconnectingWebSocket(this.wsURL, undefined, {
-      WebSocket: AuthenticatedWebSocket,
+      WebSocket: wsConstructor,
     });
 
     this.webSocket.addEventListener("message", (event) => {
@@ -1576,15 +1600,19 @@ export class MailpitClient {
     eventType: T,
     timeout: number = 5_000,
   ): Promise<MailpitEventMap[T]> {
-    if (
-      !this.webSocket ||
-      this.webSocket.readyState === ReconnectingWebSocket.CLOSED
-    ) {
-      this.connectWebSocket();
+    try {
+      if (
+        !this.webSocket ||
+        this.webSocket.readyState === ReconnectingWebSocket.CLOSED
+      ) {
+        this.connectWebSocket();
+      }
+    } catch (error) {
+      return Promise.reject(error as Error);
     }
 
     return new Promise((resolve, reject) => {
-      let timer: NodeJS.Timeout | null = null;
+      let timer: ReturnType<typeof setTimeout> | null = null;
 
       const cleanup = () => {
         if (timer) {

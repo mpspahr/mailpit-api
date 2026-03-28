@@ -131,6 +131,8 @@ dist
 
 # Testing
 test/
+demo/
+vite.config.ts
 
 # Documentation
 docs/
