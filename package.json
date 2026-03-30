@@ -1,6 +1,6 @@
 {
   "name": "mailpit-api",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "description": "A TypeScript client for interacting with Mailpit's REST API.",
   "repository": {
     "type": "git",
