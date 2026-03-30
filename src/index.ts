@@ -608,6 +608,23 @@ export type MailpitEventType = keyof MailpitEventMap;
  * console.log(await mailpit.getInfo());
  * ```
  */
+/**
+ * @internal
+ * Internal properties exposed by partysocket's ReconnectingWebSocket and the
+ * underlying `ws` WebSocket. Used to prevent the Node.js process from hanging
+ * by calling `unref()` on sockets/timers and `terminate()` on disconnect.
+ * These properties do not exist on browser WebSocket — all access is guarded
+ * with optional chaining so it degrades to a no-op in browsers.
+ */
+interface ReconnectingWebSocketInternals {
+  _ws?: {
+    _socket?: { unref?: () => void };
+    terminate?: () => void;
+  };
+  _uptimeTimeout?: { unref?: () => void };
+  _connectTimeout?: { unref?: () => void };
+}
+
 export class MailpitClient {
   private readonly axiosInstance: AxiosInstance;
   private readonly baseURL: string;
@@ -622,12 +639,6 @@ export class MailpitClient {
    * @param auth - Optional authentication credentials. Used for both REST API calls and WebSocket connections.
    * @param auth.username - The username for basic authentication.
    * @param auth.password - The password for basic authentication.
-   * @remarks
-   * **Browser limitation:** When running in a browser, authentication credentials are applied to REST API calls only.
-   * The browser's native `WebSocket` API does not support custom headers, so the `Authorization` header cannot be sent
-   * with WebSocket connections. Real-time events via {@link MailpitClient.onEvent | onEvent()} and
-   * {@link MailpitClient.waitForEvent | waitForEvent()} will connect without authentication in browser environments.
-   * This limitation does **not** affect Node.js. In Node, auth headers are sent correctly for both HTTP and WebSocket connections.
    * @example No Auth
    * ```typescript
    * const mailpit = new MailpitClient("http://localhost:8025");
@@ -1386,13 +1397,6 @@ export class MailpitClient {
    * Connects to the WebSocket endpoint for receiving real-time events.
    */
   private connectWebSocket(): void {
-    if (IS_NATIVE_WEBSOCKET && this.axiosInstance.defaults.auth) {
-      throw new Error(
-        "Basic authentication is not supported by the browser WebSocket API. " +
-          "Use a server-side proxy or disable authentication in Mailpit for real-time events.",
-      );
-    }
-
     // Return if already connected or connecting
     if (
       this.webSocket &&
@@ -1436,6 +1440,16 @@ export class MailpitClient {
         return;
       }
       this.handleWebSocketMessage(message);
+    });
+
+    // Unref the underlying TCP socket and internal timers so the WebSocket
+    // does not prevent the Node.js process from exiting naturally. Called on
+    // every "open" event to cover both initial connections and reconnections.
+    this.webSocket.addEventListener("open", () => {
+      const rws = this.webSocket as unknown as ReconnectingWebSocketInternals;
+      rws._ws?._socket?.unref?.();
+      rws._uptimeTimeout?.unref?.();
+      rws._connectTimeout?.unref?.();
     });
   }
 
@@ -1512,6 +1526,9 @@ export class MailpitClient {
       this.webSocket = null;
       // Close with code 1000 (normal closure) to prevent reconnection
       ws.close(1000, "Client disconnect");
+      // Terminate the inner socket to release the TCP handle immediately,
+      // preventing the process from hanging during the close handshake.
+      (ws as unknown as ReconnectingWebSocketInternals)._ws?.terminate?.();
     }
   }
 
@@ -1519,6 +1536,10 @@ export class MailpitClient {
    * Registers a listener for real-time events of a specific type.
    * @remarks
    * Automatically connects to the event stream if not already connected.
+   *
+   * **Browser only WebSocket limitation:** The connection will fail if Mailpit requires authentication and no other mechanism
+   * (e.g. a reverse proxy that injects credentials, or cached browser credentials from a prior UI login) is in place.
+   * This limitation does **NOT** affect Node.js. In Node, auth headers are sent correctly for both HTTP and WebSocket connections.
    * @param eventType - The type of event to listen for.
    * Specific event types include: "new" (new messages), "stats", "update", "delete", "prune", "truncate", and "error".
    * Use "*" to listen for all event types (Useful if processing all events uniformly (e.g., logging, debugging, metrics)).
@@ -1574,6 +1595,10 @@ export class MailpitClient {
    * Automatically connects to the event stream if not already connected.
    * Primarily intended for testing scenarios where you need to wait for a single specific event.
    * The promise will reject if the timeout is reached before an event is received.
+   *
+   * **Browser only WebSocket limitation:** The connection will fail if Mailpit requires authentication and no other mechanism
+   * (e.g. a reverse proxy that injects credentials, or cached browser credentials from a prior UI login) is in place.
+   * This limitation does **NOT** affect Node.js. In Node, auth headers are sent correctly for both HTTP and WebSocket connections.
    * @param eventType - The type of event to wait for.
    * Specific event types include: "new" (new messages), "stats", "update", "delete", "prune", "truncate", and "error".
    * @param timeout - Timeout in milliseconds (default: 5000ms). Pass `Infinity` to disable timeout.
