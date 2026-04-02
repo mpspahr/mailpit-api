@@ -74,6 +74,6 @@ jobs:
         run: npm run test
       - name: Upload coverage to Codecov
         if: matrix.node-version == 24 && github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
