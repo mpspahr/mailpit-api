@@ -421,7 +421,7 @@ describe("MailpitClient E2E Tests", () => {
       const spamResponse = await mailpit.spamAssassinCheck(messageId);
       /* eslint-disable jest/no-conditional-expect */
       const expectedResponse =
-        spamResponse.Error !== "" // Service error from postmark (e.g. timeout) — just verify the shape
+        spamResponse.Error !== "" // Service error from postmark (e.g. timeout) - just verify the shape
           ? {
               Error: expect.stringContaining("postmark"),
               IsSpam: expect.any(Boolean),
@@ -640,9 +640,10 @@ describe("MailpitClient E2E Tests", () => {
     });
 
     test("invalid host (request)", async () => {
-      const invalidUrlMailpit = new MailpitClient("http://invalid-host:9999");
+      const invalidHost = "http://invalid-host:9999";
+      const invalidUrlMailpit = new MailpitClient(invalidHost);
       await expect(invalidUrlMailpit.getInfo()).rejects.toThrow(
-        "Mailpit API Error: No response received from server at GET /api/v1/info",
+        `Mailpit API Error: No response received from server at GET ${invalidHost}/api/v1/info`,
       );
     });
   });

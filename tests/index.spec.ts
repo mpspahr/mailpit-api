@@ -472,7 +472,7 @@ describe("MailpitClient", () => {
   });
 
   test("waitForMessages() with exact: true or count: 0 should require exact count", async () => {
-    // exact: true — skips count=3 (too many), resolves on count=2
+    // exact: true - skips count=3 (too many), resolves on count=2
     mockedAxios.get
       .mockResolvedValueOnce({ data: mockMessagesWithCount(3) })
       .mockResolvedValueOnce({ data: mockMessagesWithCount(2) });
@@ -486,7 +486,7 @@ describe("MailpitClient", () => {
 
     jest.clearAllMocks();
 
-    // count: 0 — skips non-empty, resolves when empty
+    // count: 0 - skips non-empty, resolves when empty
     mockedAxios.get
       .mockResolvedValueOnce({ data: mockMessagesWithCount(1) })
       .mockResolvedValueOnce({ data: mockEmptyMessages });
@@ -516,7 +516,7 @@ describe("MailpitClient", () => {
   test("waitForMessages() should timeout with error message including query if provided", async () => {
     mockedAxios.get.mockResolvedValue({ data: mockMessagesWithCount(1) });
 
-    // Without query — generic timeout message
+    // Without query - generic timeout message
     await expect(
       internalClient.waitForMessages(
         { count: 5 },
@@ -524,7 +524,7 @@ describe("MailpitClient", () => {
       ),
     ).rejects.toThrow("Timeout waiting for messages");
 
-    // With query — error message includes the query string
+    // With query - error message includes the query string
     await expect(
       internalClient.waitForMessages(
         { query: "from:nobody@example.test", count: 5 },
