@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import path from "path";
-import { describe, test, expect, afterAll, afterEach } from "@jest/globals";
+import { describe, test, expect, afterAll, afterEach } from "vitest";
 import {
   MailpitClient,
   type MailpitConfigurationResponse,
@@ -413,7 +413,7 @@ describe("MailpitClient E2E Tests", () => {
       }
 
       const spamResponse = await mailpit.spamAssassinCheck(messageId);
-      /* eslint-disable jest/no-conditional-expect */
+      /* eslint-disable vitest/no-conditional-expect */
       const expectedResponse =
         spamResponse.Error !== "" // Service error from postmark (e.g. timeout) - just verify the shape
           ? {
@@ -435,7 +435,7 @@ describe("MailpitClient E2E Tests", () => {
               Score: expect.any(Number),
             };
       expect(spamResponse).toEqual(expectedResponse);
-      /* eslint-enable jest/no-conditional-expect */
+      /* eslint-enable vitest/no-conditional-expect */
     });
   });
 
