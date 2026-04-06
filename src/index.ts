@@ -6,21 +6,11 @@ import WS from "isomorphic-ws";
 const IS_NATIVE_WEBSOCKET =
   typeof WebSocket !== "undefined" && (WS as unknown) === WebSocket;
 
-const IS_NODE =
-  typeof process !== "undefined" &&
-  (process as { versions?: { node?: string } }).versions?.node !== undefined;
-
-/** UTF-8-safe Base64 encoding that works in both Node.js and browsers. */
+/** @internal UTF-8-safe Base64 encoding that works in both Node.js 18+ and browsers. */
 function base64Encode(input: string): string {
-  if (IS_NODE) {
-    return Buffer.from(input, "utf-8").toString("base64");
-  }
   const bytes = new TextEncoder().encode(input);
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary);
+  const binString = String.fromCodePoint(...bytes);
+  return btoa(binString);
 }
 
 // COMMON TYPES
