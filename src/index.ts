@@ -636,24 +636,10 @@ interface ReconnectingWebSocketInternals {
   _connectTimeout?: { unref?: () => void };
 }
 
-/**
- * @internal
- * Internal response structure returned by the Mailpit API.
- */
-interface InternalResponse<T> {
-  data: T;
-  headers: Headers;
-  status: number;
-  statusText: string;
-}
-
 /** @internal Request HTTP methods */
 type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 
-/**
- * @internal
- * Internal options for HTTP requests.
- */
+/** @internal Internal options for HTTP requests */
 interface RequestOptions {
   // Typed as `object` so named interfaces (e.g. MailpitSearchRequest) are
   // assignable without requiring an explicit index signature.
@@ -715,14 +701,6 @@ export class MailpitClient {
    * @internal
    * Thin wrapper around {@link MailpitClient.request} that returns only the response data.
    */
-  private async handleRequest<T>(
-    method: HttpMethod,
-    path: string,
-    options?: RequestOptions,
-  ): Promise<T> {
-    return (await this.request<T>(method, path, options)).data;
-  }
-
   /**
    * @internal
    * Fetch wrapper. Builds the URL, sets headers, sends the request,
@@ -733,7 +711,7 @@ export class MailpitClient {
     method: HttpMethod,
     path: string,
     options: RequestOptions = {},
-  ): Promise<InternalResponse<T>> {
+  ): Promise<T> {
     const { params, body, responseType = "json" } = options;
     // Concatenate to preserve any sub-path in baseURL (e.g. http://host/prefix)
     const url = new URL(this.baseURL.replace(/\/+$/, "") + path);
@@ -771,43 +749,25 @@ export class MailpitClient {
     }
 
     if (response.status !== 200) {
-      let responseBody: unknown;
-      try {
-        const text = await response.text();
-        try {
-          responseBody = JSON.parse(text) as unknown;
-        } catch {
-          responseBody = text;
-        }
-      } catch {
-        responseBody = "";
-      }
+      const message = await response.text().catch(() => "");
       throw new Error(
-        `Mailpit API Error: ${response.status.toString()} ${response.statusText} at ${method} ${urlString}: ${JSON.stringify(responseBody)}`,
+        `Mailpit API Error: ${String(response.status)} ${response.statusText} at ${method} ${urlString}: ${message}`,
       );
     }
 
-    let data: T;
     try {
       if (responseType === "blob") {
-        data = (await response.blob()) as T & Blob;
+        return (await response.blob()) as T & Blob;
       } else if (responseType === "text") {
-        data = (await response.text()) as T & string;
+        return (await response.text()) as T & string;
       } else {
-        data = (await response.json()) as T;
+        return (await response.json()) as T;
       }
     } catch (error: unknown) {
       throw new Error(
         `Mailpit API Error: ${(error as Error).toString()} at ${method} ${urlString}`,
       );
     }
-
-    return {
-      data,
-      headers: response.headers,
-      status: response.status,
-      statusText: response.statusText,
-    };
   }
 
   /**
@@ -820,7 +780,7 @@ export class MailpitClient {
    * ```
    */
   public async getInfo(): Promise<MailpitInfoResponse> {
-    return await this.handleRequest<MailpitInfoResponse>("GET", "/api/v1/info");
+    return await this.request<MailpitInfoResponse>("GET", "/api/v1/info");
   }
 
   /**
@@ -833,7 +793,7 @@ export class MailpitClient {
    * ```
    */
   public async getConfiguration(): Promise<MailpitConfigurationResponse> {
-    return await this.handleRequest<MailpitConfigurationResponse>(
+    return await this.request<MailpitConfigurationResponse>(
       "GET",
       "/api/v1/webui",
     );
@@ -851,7 +811,7 @@ export class MailpitClient {
   public async getMessageSummary(
     id: string = "latest",
   ): Promise<MailpitMessageSummaryResponse> {
-    return await this.handleRequest<MailpitMessageSummaryResponse>(
+    return await this.request<MailpitMessageSummaryResponse>(
       "GET",
       `/api/v1/message/${id}`,
     );
@@ -870,7 +830,7 @@ export class MailpitClient {
   public async getMessageHeaders(
     id: string = "latest",
   ): Promise<MailpitMessageHeadersResponse> {
-    return await this.handleRequest<MailpitMessageHeadersResponse>(
+    return await this.request<MailpitMessageHeadersResponse>(
       "GET",
       `/api/v1/message/${id}/headers`,
     );
@@ -893,11 +853,9 @@ export class MailpitClient {
    * ```
    */
   public async getMessageAttachment(id: string, partID: string): Promise<Blob> {
-    return (
-      await this.request<Blob>("GET", `/api/v1/message/${id}/part/${partID}`, {
-        responseType: "blob",
-      })
-    ).data;
+    return this.request<Blob>("GET", `/api/v1/message/${id}/part/${partID}`, {
+      responseType: "blob",
+    });
   }
 
   /**
@@ -923,13 +881,11 @@ export class MailpitClient {
     id: string,
     partID: string,
   ): Promise<Blob> {
-    return (
-      await this.request<Blob>(
-        "GET",
-        `/api/v1/message/${id}/part/${partID}/thumb`,
-        { responseType: "blob" },
-      )
-    ).data;
+    return this.request<Blob>(
+      "GET",
+      `/api/v1/message/${id}/part/${partID}/thumb`,
+      { responseType: "blob" },
+    );
   }
 
   /**
@@ -942,11 +898,9 @@ export class MailpitClient {
    * ```
    */
   public async getMessageSource(id: string = "latest"): Promise<string> {
-    return await this.handleRequest<string>(
-      "GET",
-      `/api/v1/message/${id}/raw`,
-      { responseType: "text" },
-    );
+    return await this.request<string>("GET", `/api/v1/message/${id}/raw`, {
+      responseType: "text",
+    });
   }
 
   /**
@@ -964,11 +918,10 @@ export class MailpitClient {
     id: string,
     relayTo: { To: string[] },
   ): Promise<string> {
-    return await this.handleRequest<string>(
-      "POST",
-      `/api/v1/message/${id}/release`,
-      { body: relayTo, responseType: "text" },
-    );
+    return await this.request<string>("POST", `/api/v1/message/${id}/release`, {
+      body: relayTo,
+      responseType: "text",
+    });
   }
 
   /**
@@ -987,7 +940,7 @@ export class MailpitClient {
   public async sendMessage(
     sendRequest: MailpitSendRequest,
   ): Promise<MailpitSendMessageConfirmationResponse> {
-    return await this.handleRequest<MailpitSendMessageConfirmationResponse>(
+    return await this.request<MailpitSendMessageConfirmationResponse>(
       "POST",
       "/api/v1/send",
       { body: sendRequest },
@@ -1010,7 +963,7 @@ export class MailpitClient {
     start: number = 0,
     limit: number = 50,
   ): Promise<MailpitMessagesSummaryResponse> {
-    return await this.handleRequest<MailpitMessagesSummaryResponse>(
+    return await this.request<MailpitMessagesSummaryResponse>(
       "GET",
       "/api/v1/messages",
       { params: { start, limit } },
@@ -1049,7 +1002,7 @@ export class MailpitClient {
     readStatus: MailpitReadStatusRequest = {},
     params?: MailpitTimeZoneRequest,
   ): Promise<string> {
-    return await this.handleRequest<string>("PUT", "/api/v1/messages", {
+    return await this.request<string>("PUT", "/api/v1/messages", {
       body: readStatus,
       params,
       responseType: "text",
@@ -1073,7 +1026,7 @@ export class MailpitClient {
   public async deleteMessages(
     deleteRequest?: MailpitDatabaseIDsRequest,
   ): Promise<string> {
-    return await this.handleRequest<string>("DELETE", "/api/v1/messages", {
+    return await this.request<string>("DELETE", "/api/v1/messages", {
       body: deleteRequest,
       responseType: "text",
     });
@@ -1095,7 +1048,7 @@ export class MailpitClient {
   public async searchMessages(
     search: MailpitSearchMessagesRequest,
   ): Promise<MailpitMessagesSummaryResponse> {
-    return await this.handleRequest<MailpitMessagesSummaryResponse>(
+    return await this.request<MailpitMessagesSummaryResponse>(
       "GET",
       "/api/v1/search",
       { params: search },
@@ -1248,7 +1201,7 @@ export class MailpitClient {
   public async deleteMessagesBySearch(
     search: MailpitSearchRequest,
   ): Promise<string> {
-    return await this.handleRequest<string>("DELETE", "/api/v1/search", {
+    return await this.request<string>("DELETE", "/api/v1/search", {
       params: search,
       responseType: "text",
     });
@@ -1266,7 +1219,7 @@ export class MailpitClient {
   public async htmlCheck(
     id: string = "latest",
   ): Promise<MailpitHTMLCheckResponse> {
-    return await this.handleRequest<MailpitHTMLCheckResponse>(
+    return await this.request<MailpitHTMLCheckResponse>(
       "GET",
       `/api/v1/message/${id}/html-check`,
     );
@@ -1286,7 +1239,7 @@ export class MailpitClient {
     id: string = "latest",
     follow: boolean = false,
   ): Promise<MailpitLinkCheckResponse> {
-    return await this.handleRequest<MailpitLinkCheckResponse>(
+    return await this.request<MailpitLinkCheckResponse>(
       "GET",
       `/api/v1/message/${id}/link-check`,
       { params: { follow } },
@@ -1305,7 +1258,7 @@ export class MailpitClient {
   public async spamAssassinCheck(
     id: string = "latest",
   ): Promise<MailpitSpamAssassinResponse> {
-    return await this.handleRequest<MailpitSpamAssassinResponse>(
+    return await this.request<MailpitSpamAssassinResponse>(
       "GET",
       `/api/v1/message/${id}/sa-check`,
     );
@@ -1320,7 +1273,7 @@ export class MailpitClient {
    * ```
    */
   public async getTags(): Promise<string[]> {
-    return await this.handleRequest<string[]>("GET", "/api/v1/tags");
+    return await this.request<string[]>("GET", "/api/v1/tags");
   }
 
   /**
@@ -1339,7 +1292,7 @@ export class MailpitClient {
    * ```
    */
   public async setTags(request: MailpitSetTagsRequest): Promise<string> {
-    return await this.handleRequest<string>("PUT", "/api/v1/tags", {
+    return await this.request<string>("PUT", "/api/v1/tags", {
       body: request,
       responseType: "text",
     });
@@ -1360,11 +1313,10 @@ export class MailpitClient {
    */
   public async renameTag(tag: string, newTagName: string): Promise<string> {
     const encodedTag = encodeURIComponent(tag);
-    return await this.handleRequest<string>(
-      "PUT",
-      `/api/v1/tags/${encodedTag}`,
-      { body: { Name: newTagName }, responseType: "text" },
-    );
+    return await this.request<string>("PUT", `/api/v1/tags/${encodedTag}`, {
+      body: { Name: newTagName },
+      responseType: "text",
+    });
   }
 
   /**
@@ -1379,11 +1331,9 @@ export class MailpitClient {
    */
   public async deleteTag(tag: string): Promise<string> {
     const encodedTag = encodeURIComponent(tag);
-    return await this.handleRequest<string>(
-      "DELETE",
-      `/api/v1/tags/${encodedTag}`,
-      { responseType: "text" },
-    );
+    return await this.request<string>("DELETE", `/api/v1/tags/${encodedTag}`, {
+      responseType: "text",
+    });
   }
 
   /**
@@ -1396,7 +1346,7 @@ export class MailpitClient {
    * ```
    */
   public async getChaosTriggers(): Promise<MailpitChaosTriggersResponse> {
-    return await this.handleRequest<MailpitChaosTriggersResponse>(
+    return await this.request<MailpitChaosTriggersResponse>(
       "GET",
       "/api/v1/chaos",
     );
@@ -1418,7 +1368,7 @@ export class MailpitClient {
   public async setChaosTriggers(
     triggers: MailpitChaosTriggersRequest = {},
   ): Promise<MailpitChaosTriggersResponse> {
-    return await this.handleRequest<MailpitChaosTriggersResponse>(
+    return await this.request<MailpitChaosTriggersResponse>(
       "PUT",
       "/api/v1/chaos",
       { body: triggers },
@@ -1447,7 +1397,7 @@ export class MailpitClient {
     id: string = "latest",
     embed?: 1,
   ): Promise<string> {
-    return await this.handleRequest<string>("GET", `/view/${id}.html`, {
+    return await this.request<string>("GET", `/view/${id}.html`, {
       params: { embed },
       responseType: "text",
     });
@@ -1463,7 +1413,7 @@ export class MailpitClient {
    * ```
    */
   public async renderMessageText(id: string = "latest"): Promise<string> {
-    return await this.handleRequest<string>("GET", `/view/${id}.txt`, {
+    return await this.request<string>("GET", `/view/${id}.txt`, {
       responseType: "text",
     });
   }

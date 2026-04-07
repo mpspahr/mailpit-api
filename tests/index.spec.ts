@@ -170,7 +170,7 @@ describe("MailpitClient", () => {
   test("should throw a descriptive error when server returns non-200 status with text body", async () => {
     mockFetch.mockResolvedValue(mockTextResponse("Boom!", 500));
     await expect(client.getInfo()).rejects.toThrow(
-      'Mailpit API Error: 500 Error at GET http://localhost:8025/api/v1/info: "Boom!"',
+      "Mailpit API Error: 500 Error at GET http://localhost:8025/api/v1/info: Boom!",
     );
   });
 
@@ -178,6 +178,21 @@ describe("MailpitClient", () => {
     mockFetch.mockResolvedValue(mockJsonResponse({ error: "not found" }, 404));
     await expect(client.getInfo()).rejects.toThrow(
       'Mailpit API Error: 404 Error at GET http://localhost:8025/api/v1/info: {"error":"not found"}',
+    );
+  });
+
+  test("should throw a descriptive error when response body parsing fails", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: () => Promise.reject(new SyntaxError("Unexpected token")),
+      text: () => Promise.reject(new Error("stream error")),
+      blob: () => Promise.reject(new Error("stream error")),
+      headers: new Headers(),
+    } as unknown as Response);
+    await expect(client.getInfo()).rejects.toThrow(
+      "Mailpit API Error: SyntaxError: Unexpected token at GET http://localhost:8025/api/v1/info",
     );
   });
 
