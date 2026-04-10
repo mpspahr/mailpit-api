@@ -1,41 +1,71 @@
 import {
-  jest,
+  vi,
   describe,
   beforeEach,
   afterEach,
   expect,
   test,
-} from "@jest/globals";
-import axios, { AxiosInstance } from "axios";
+  type Mock,
+} from "vitest";
 import ReconnectingWebSocket from "partysocket/ws";
 import { MailpitClient } from "../src/index";
 
-jest.mock("axios");
+// vi.hoisted ensures this Map is available inside the vi.mock() factory below,
+// which vitest hoists before all imports.
+const mockWebSocketHandlers = vi.hoisted(
+  () => new Map<string, ((...args: never[]) => void)[]>(),
+);
 
-const mockWebSocketHandlers = new Map<string, ((...args: never[]) => void)[]>();
-
-jest.mock("partysocket/ws", () => {
-  const mock = Object.assign(
-    jest.fn(() => ({
-      readyState: 1,
-      addEventListener: jest.fn(
-        (event: string, handler: (...args: never[]) => void) => {
-          const handlers = mockWebSocketHandlers.get(event) ?? [];
-          handlers.push(handler);
-          mockWebSocketHandlers.set(event, handlers);
-        },
-      ),
-      removeEventListener: jest.fn(),
-      close: jest.fn(),
-    })),
-    { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 },
-  );
-  return { __esModule: true, default: mock };
+vi.mock("partysocket/ws", () => {
+  // Must use a regular function (not arrow) so the mock can be used as a constructor
+  // with `new ReconnectingWebSocket(...)`.
+  const mock = vi.fn(function (this: Record<string, unknown>) {
+    this.readyState = 1;
+    this.addEventListener = vi.fn(
+      (event: string, handler: (...args: never[]) => void) => {
+        const handlers = mockWebSocketHandlers.get(event) ?? [];
+        handlers.push(handler);
+        mockWebSocketHandlers.set(event, handlers);
+      },
+    );
+    this.removeEventListener = vi.fn();
+    this.close = vi.fn();
+  });
+  Object.assign(mock, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 });
+  return { default: mock };
 });
+
+/** Build a minimal fetch-compatible Response mock */
+function mockJsonResponse(data: unknown, status = 200): Response {
+  const body = JSON.stringify(data);
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: status === 200 ? "OK" : "Error",
+    headers: { get: () => "application/json" },
+    json: () => Promise.resolve(data),
+    text: () => Promise.resolve(body),
+    blob: () => Promise.resolve(new Blob([body])),
+    arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+  } as unknown as Response;
+}
+
+function mockTextResponse(text: string, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: status === 200 ? "OK" : "Error",
+    headers: { get: () => "text/plain" },
+    json: () => Promise.reject(new SyntaxError("not json")),
+    text: () => Promise.resolve(text),
+    blob: () => Promise.resolve(new Blob([text])),
+    arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+  } as unknown as Response;
+}
 
 describe("MailpitClient", () => {
   let client: MailpitClient;
-  let mockedAxios: jest.Mocked<AxiosInstance>;
+  let mockFetch: Mock;
   let internalClient: {
     connectWebSocket: () => void;
     disconnect: () => void;
@@ -62,143 +92,107 @@ describe("MailpitClient", () => {
   };
 
   beforeEach(() => {
-    mockedAxios = {
-      get: jest.fn(),
-      post: jest.fn(),
-      put: jest.fn(),
-      delete: jest.fn(),
-      defaults: {},
-    } as unknown as jest.Mocked<AxiosInstance>;
-
-    // Mock axios.create to return our mocked instance
-    (axios.create as jest.Mock).mockReturnValue(mockedAxios);
-
-    // Type-safe mock of isAxiosError
-    (axios.isAxiosError as unknown as jest.Mock).mockImplementation((error) => {
-      return (
-        error &&
-        typeof error === "object" &&
-        "name" in error &&
-        error.name === "AxiosError"
-      );
-    });
-
+    mockFetch = vi.fn();
+    vi.stubGlobal("fetch", mockFetch);
     client = new MailpitClient("http://localhost:8025");
     internalClient = client as unknown as typeof internalClient;
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
     mockWebSocketHandlers.clear();
   });
 
   test("should call setReadStatus() with no parameters and return ok", async () => {
-    mockedAxios.put.mockResolvedValue({ data: "ok" });
+    mockFetch.mockResolvedValue(mockTextResponse("ok"));
     const result = await client.setReadStatus();
-    expect(mockedAxios.put).toHaveBeenCalledWith(
-      "/api/v1/messages",
-      {},
-      {
-        params: undefined,
-      },
-    );
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8025/api/v1/messages");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body as string)).toEqual({});
     expect(result).toBe("ok");
   });
 
   // Methods that could be skipped in e2e if feature not enabled
   test("should call releaseMessage() and return ok", async () => {
-    mockedAxios.post.mockResolvedValue({ data: "ok" });
+    mockFetch.mockResolvedValue(mockTextResponse("ok"));
     const result = await client.releaseMessage("id", { To: ["a@b.com"] });
-    expect(mockedAxios.post).toHaveBeenCalledWith(
-      "/api/v1/message/id/release",
-      { To: ["a@b.com"] },
-    );
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8025/api/v1/message/id/release");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ To: ["a@b.com"] });
     expect(result).toBe("ok");
   });
 
   test("should call spamAssassinCheck() and return spam check response", async () => {
     const mockData = { Errors: 0, IsSpam: false, Rules: [], Score: 0 };
-    mockedAxios.get.mockResolvedValue({ data: mockData });
+    mockFetch.mockResolvedValue(mockJsonResponse(mockData));
     const result = await client.spamAssassinCheck();
-    expect(mockedAxios.get).toHaveBeenCalledWith(
-      "/api/v1/message/latest/sa-check",
-    );
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8025/api/v1/message/latest/sa-check");
+    expect(init.method).toBe("GET");
     expect(result).toEqual(mockData);
   });
 
-  const mockData = {
-    Authentication: {
-      ErrorCode: 451,
-      Probability: 5,
-    },
-    Recipient: {
-      ErrorCode: 451,
-      Probability: 5,
-    },
-    Sender: {
-      ErrorCode: 451,
-      Probability: 5,
-    },
+  const mockChaosData = {
+    Authentication: { ErrorCode: 451, Probability: 5 },
+    Recipient: { ErrorCode: 451, Probability: 5 },
+    Sender: { ErrorCode: 451, Probability: 5 },
   };
 
   test("should call getChaosTriggers() and return triggers", async () => {
-    mockedAxios.get.mockResolvedValue({ data: mockData });
+    mockFetch.mockResolvedValue(mockJsonResponse(mockChaosData));
     const result = await client.getChaosTriggers();
-    expect(mockedAxios.get).toHaveBeenCalledWith("/api/v1/chaos");
-    expect(result).toEqual(mockData);
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8025/api/v1/chaos");
+    expect(init.method).toBe("GET");
+    expect(result).toEqual(mockChaosData);
   });
 
   test("should call setChaosTriggers() and return ok", async () => {
-    mockedAxios.put.mockResolvedValue({ data: mockData });
+    mockFetch.mockResolvedValue(mockJsonResponse(mockChaosData));
     const result = await client.setChaosTriggers();
-    expect(mockedAxios.put).toHaveBeenCalledWith("/api/v1/chaos", {});
-    expect(result).toEqual(mockData);
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://localhost:8025/api/v1/chaos");
+    expect(init.method).toBe("PUT");
+    expect(result).toEqual(mockChaosData);
   });
 
   // Error handling cases
-  test("should handle NOT AxiosError", async () => {
-    mockedAxios.get.mockRejectedValue({ response: { data: "error" } });
-    await expect(client.getInfo()).rejects.toThrow();
-  });
-
-  test("should handle AxiosError with a response", async () => {
-    const error = {
-      name: "AxiosError",
-      message: "Response Error",
-      config: { url: "/api/v1/info", method: "GET" },
-      response: {
-        status: 500,
-        data: "Boom!",
-
-        statusText: "Internal Server Error",
-      },
-    };
-    mockedAxios.get.mockRejectedValue(error);
+  test("should throw a descriptive error when fetch rejects (network failure)", async () => {
+    mockFetch.mockRejectedValue(new TypeError("fetch failed"));
     await expect(client.getInfo()).rejects.toThrow(
-      'Mailpit API Error: 500 Internal Server Error at GET /api/v1/info: "Boom!"',
+      "Mailpit API Error: No response received from server at GET http://localhost:8025/api/v1/info: fetch failed",
     );
   });
 
-  test("should handle AxiosError without a response but with a request", async () => {
-    const error = {
-      name: "AxiosError",
-      config: { url: "/api/v1/info", method: "GET" },
-      request: {},
-    };
-    mockedAxios.get.mockRejectedValue(error);
+  test("should throw a descriptive error when server returns non-200 status with text body", async () => {
+    mockFetch.mockResolvedValue(mockTextResponse("Boom!", 500));
     await expect(client.getInfo()).rejects.toThrow(
-      "Mailpit API Error: No response received from server at GET /api/v1/info",
+      "Mailpit API Error: 500 Error at GET http://localhost:8025/api/v1/info: Boom!",
     );
   });
 
-  test("should handle AxiosError with no request, no response, no method, and no url", async () => {
-    const error = {
-      name: "AxiosError",
-      message: "Something Other Error",
-    };
-    mockedAxios.get.mockRejectedValue(error);
+  test("should throw a descriptive error when server returns non-200 status with JSON body", async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ error: "not found" }, 404));
     await expect(client.getInfo()).rejects.toThrow(
-      /Mailpit API Error: .+ at UNKNOWN METHOD UNKNOWN URL/,
+      'Mailpit API Error: 404 Error at GET http://localhost:8025/api/v1/info: {"error":"not found"}',
+    );
+  });
+
+  test("should throw a descriptive error when response body parsing fails", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: () => Promise.reject(new SyntaxError("Unexpected token")),
+      text: () => Promise.reject(new Error("stream error")),
+      blob: () => Promise.reject(new Error("stream error")),
+      headers: new Headers(),
+    } as unknown as Response);
+    await expect(client.getInfo()).rejects.toThrow(
+      "Mailpit API Error: SyntaxError: Unexpected token at GET http://localhost:8025/api/v1/info",
     );
   });
 
@@ -209,25 +203,10 @@ describe("MailpitClient", () => {
     );
   });
 
-  test("should pass axiosConfig to axios.create() while keeping baseURL and auth override", () => {
-    new MailpitClient(
-      "https://localhost:8025",
-      { username: "u", password: "p" },
-      { headers: { common: { Cookie: "session=abc" } } },
-    );
-    expect(axios.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        baseURL: "https://localhost:8025",
-        auth: { username: "u", password: "p" },
-        headers: { common: { Cookie: "session=abc" } },
-      }),
-    );
-  });
-
   // WebSocket configuration tests (connection behavior is tested in E2E)
   test("should not auto-connect WebSocket by default", () => {
-    const client = new MailpitClient("http://localhost:8025");
-    expect(client["webSocket"]).toBeNull();
+    const newClient = new MailpitClient("http://localhost:8025");
+    expect(newClient["webSocket"]).toBeNull();
   });
 
   test("connectWebSocket() should return early when already connected", () => {
@@ -236,22 +215,19 @@ describe("MailpitClient", () => {
     } as unknown as ReconnectingWebSocket;
 
     internalClient.webSocket = existingWebSocket;
-
     internalClient.connectWebSocket();
-
     expect(internalClient.webSocket).toBe(existingWebSocket);
   });
 
   test("disconnect() should do nothing when no WebSocket exists", () => {
     internalClient.webSocket = null;
     internalClient.disconnect();
-
     expect(internalClient.webSocket).toBeNull();
   });
 
   test("onEvent() should return unsubscribe function that removes listener", () => {
-    const listener1 = jest.fn();
-    const listener2 = jest.fn();
+    const listener1 = vi.fn();
+    const listener2 = vi.fn();
 
     const unsubscribe1 = internalClient.onEvent("new", listener1);
     const unsubscribe2 = internalClient.onEvent("new", listener2);
@@ -266,13 +242,11 @@ describe("MailpitClient", () => {
   });
 
   test("disconnect() should terminate the inner socket for clean process exit", () => {
-    const mockTerminate = jest.fn();
+    const mockTerminate = vi.fn();
 
-    // Connect to create a WebSocket
     internalClient.connectWebSocket();
     expect(internalClient.webSocket).not.toBeNull();
 
-    // Set up _ws.terminate on the mock WebSocket
     const ws = internalClient.webSocket as unknown as Record<string, unknown>;
     ws._ws = { terminate: mockTerminate };
 
@@ -283,21 +257,18 @@ describe("MailpitClient", () => {
   });
 
   test("connectWebSocket() should unref the underlying socket and timers on open", () => {
-    const mockUnref = jest.fn();
+    const mockUnref = vi.fn();
 
     internalClient.connectWebSocket();
 
-    // Get the "open" handler registered on the mock WebSocket
     const openHandlers = mockWebSocketHandlers.get("open") ?? [];
     expect(openHandlers.length).toBeGreaterThan(0);
 
-    // Set up _ws._socket and timer mocks with unref
     const ws = internalClient.webSocket as unknown as Record<string, unknown>;
     ws._ws = { _socket: { unref: mockUnref } };
     ws._uptimeTimeout = { unref: mockUnref };
     ws._connectTimeout = { unref: mockUnref };
 
-    // Simulate the "open" event
     openHandlers[0]({} as never);
 
     expect(mockUnref).toHaveBeenCalledTimes(3);
@@ -315,7 +286,6 @@ describe("MailpitClient", () => {
     expect(internalClient.webSocket).not.toBe(closedWebSocket);
     expect(internalClient.webSocket).not.toBeNull();
 
-    // Clean up the promise to avoid unhandled rejection
     promise.catch(() => {});
   });
 
@@ -326,33 +296,26 @@ describe("MailpitClient", () => {
       'Timeout waiting for event of type "new"',
     );
 
-    // Verify listener was cleaned up (Set should be empty)
     const listeners = internalClient.eventListeners.get("new");
     expect(listeners?.size || 0).toBe(0);
   });
 
   test("waitForEvent() should not timeout when passed Infinity", async () => {
-    // Spy on the method and wrap it to provide a short default timeout
     const originalMethod = internalClient.waitForEvent.bind(internalClient);
-    const spy = jest.fn((eventType: string, timeout: number = 50) => {
+    const spy = vi.fn((eventType: string, timeout: number = 50) => {
       return originalMethod(eventType, timeout);
     });
     internalClient.waitForEvent = spy;
 
-    // Pass Infinity explicitly - message arrives at 100ms
-    // The spy has a default timeout of 50ms, so if Infinity wasn't respected,
-    // this test would fail with a timeout error at 50ms before the message arrives at 100ms
     const promise = internalClient.waitForEvent("new", Infinity);
 
-    // Verify the method was called with Infinity
     expect(spy).toHaveBeenCalledWith("new", Infinity);
 
-    // Verify listener was added
     const listeners = internalClient.eventListeners.get("new");
     expect(listeners?.size).toBe(1);
 
-    // Simulate a message arriving after 100ms
-    // This is longer than the 50ms default - proves Infinity disabled the timeout
+    // Message arrives at 100ms - longer than the spy's 50ms default,
+    // proving Infinity disabled the timeout
     setTimeout(() => {
       internalClient.handleWebSocketMessage({
         Type: "new",
@@ -364,35 +327,27 @@ describe("MailpitClient", () => {
 
     expect(result.Type).toBe("new");
     expect(result.Data).toEqual({ ID: "test-123" });
-
-    // Verify listener was cleaned up after resolution
     expect(internalClient.eventListeners.get("new")?.size || 0).toBe(0);
   });
 
   test("removeListener() should handle removeListener when no listeners exist", () => {
     const removeListener = internalClient.removeListener.bind(internalClient);
-
-    // Call removeListener when there are no listeners registered
-    // This should not throw an error
     expect(() => {
       removeListener("new", () => {});
     }).not.toThrow();
   });
 
   test("should silently ignore malformed JSON messages from WebSocket", () => {
-    const mockListener = jest.fn();
+    const mockListener = vi.fn();
     client.onEvent("new", mockListener);
 
-    // Verify the message handler was captured by the mock
     const messageHandlers = mockWebSocketHandlers.get("message") ?? [];
     expect(messageHandlers.length).toBeGreaterThan(0);
 
-    // Call the handler with malformed JSON - this should not throw
     expect(() => {
       messageHandlers[0]({ data: "{ this is not valid json }" } as never);
     }).not.toThrow();
 
-    // Verify listener was never called (malformed message was silently ignored)
     expect(mockListener).not.toHaveBeenCalled();
   });
 
@@ -432,25 +387,25 @@ describe("MailpitClient", () => {
   };
 
   test("waitForMessage() should poll until a message appears", async () => {
-    mockedAxios.get
-      .mockResolvedValueOnce({ data: mockEmptyMessages }) // first poll: no messages
-      .mockResolvedValueOnce({ data: mockMessagesWithCount(1) }) // second poll: found
-      .mockResolvedValueOnce({ data: mockFullMessage }); // getMessageSummary
+    mockFetch
+      .mockResolvedValueOnce(mockJsonResponse(mockEmptyMessages))
+      .mockResolvedValueOnce(mockJsonResponse(mockMessagesWithCount(1)))
+      .mockResolvedValueOnce(mockJsonResponse(mockFullMessage));
 
     const result = await internalClient.waitForMessage({
       query: "subject:Test",
     });
 
-    expect(mockedAxios.get).toHaveBeenCalledWith("/api/v1/search", {
-      params: { query: "subject:Test" },
-    });
-    expect(mockedAxios.get).toHaveBeenCalledWith("/api/v1/message/msg-1");
-    expect(mockedAxios.get).toHaveBeenCalledTimes(3);
+    const calls = mockFetch.mock.calls as [string, RequestInit][];
+    expect(calls[0][0]).toContain("/api/v1/search");
+    expect(calls[0][0]).toContain("query=subject%3ATest");
+    expect(calls[2][0]).toContain("/api/v1/message/msg-1");
+    expect(mockFetch).toHaveBeenCalledTimes(3);
     expect(result).toEqual(mockFullMessage);
   });
 
   test("waitForMessage() should timeout when no messages match", async () => {
-    mockedAxios.get.mockResolvedValue({ data: mockEmptyMessages });
+    mockFetch.mockResolvedValue(mockJsonResponse(mockEmptyMessages));
 
     await expect(
       internalClient.waitForMessage(
@@ -463,62 +418,63 @@ describe("MailpitClient", () => {
   });
 
   test("waitForMessages() should use listMessages() by default and resolve when condition met", async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: mockMessagesWithCount(1) });
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockMessagesWithCount(1)));
 
     const result = await internalClient.waitForMessages();
 
     expect(result.messages_count).toBe(1);
-    expect(mockedAxios.get).toHaveBeenCalledWith("/api/v1/messages", {
-      params: { start: 0, limit: 50 },
-    });
+    const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/api/v1/messages");
+    expect(url).toContain("start=0");
+    expect(url).toContain("limit=50");
   });
 
   test("waitForMessages() should use searchMessages() when search provided", async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: mockMessagesWithCount(1) });
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(mockMessagesWithCount(1)));
 
     await internalClient.waitForMessages(
       { query: "from:test@example.test" },
       { timeout: 1000, interval: 50 },
     );
 
-    expect(mockedAxios.get).toHaveBeenCalledWith("/api/v1/search", {
-      params: { query: "from:test@example.test" },
-    });
+    const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/api/v1/search");
+    expect(url).toContain("query=from%3Atest%40example.test");
   });
 
   test("waitForMessages() with exact: true or count: 0 should require exact count", async () => {
-    // exact: true — skips count=3 (too many), resolves on count=2
-    mockedAxios.get
-      .mockResolvedValueOnce({ data: mockMessagesWithCount(3) })
-      .mockResolvedValueOnce({ data: mockMessagesWithCount(2) });
+    // exact: true - skips count=3 (too many), resolves on count=2
+    mockFetch
+      .mockResolvedValueOnce(mockJsonResponse(mockMessagesWithCount(3)))
+      .mockResolvedValueOnce(mockJsonResponse(mockMessagesWithCount(2)));
 
     const exactResult = await internalClient.waitForMessages(
       { count: 2, exact: true },
       { timeout: 1000, interval: 50 },
     );
     expect(exactResult.messages_count).toBe(2);
-    expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
 
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
-    // count: 0 — skips non-empty, resolves when empty
-    mockedAxios.get
-      .mockResolvedValueOnce({ data: mockMessagesWithCount(1) })
-      .mockResolvedValueOnce({ data: mockEmptyMessages });
+    // count: 0 - skips non-empty, resolves when empty
+    mockFetch
+      .mockResolvedValueOnce(mockJsonResponse(mockMessagesWithCount(1)))
+      .mockResolvedValueOnce(mockJsonResponse(mockEmptyMessages));
 
     const zeroResult = await internalClient.waitForMessages(
       { count: 0 },
       { timeout: 1000, interval: 50 },
     );
     expect(zeroResult.messages_count).toBe(0);
-    expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
   test("waitForMessages() should not timeout when passed Infinity", async () => {
-    mockedAxios.get
-      .mockResolvedValueOnce({ data: mockEmptyMessages })
-      .mockResolvedValueOnce({ data: mockEmptyMessages })
-      .mockResolvedValueOnce({ data: mockMessagesWithCount(1) });
+    mockFetch
+      .mockResolvedValueOnce(mockJsonResponse(mockEmptyMessages))
+      .mockResolvedValueOnce(mockJsonResponse(mockEmptyMessages))
+      .mockResolvedValueOnce(mockJsonResponse(mockMessagesWithCount(1)));
 
     const result = await internalClient.waitForMessages({
       timeout: Infinity,
@@ -529,9 +485,9 @@ describe("MailpitClient", () => {
   });
 
   test("waitForMessages() should timeout with error message including query if provided", async () => {
-    mockedAxios.get.mockResolvedValue({ data: mockMessagesWithCount(1) });
+    mockFetch.mockResolvedValue(mockJsonResponse(mockMessagesWithCount(1)));
 
-    // Without query — generic timeout message
+    // Without query - generic timeout message
     await expect(
       internalClient.waitForMessages(
         { count: 5 },
@@ -539,7 +495,7 @@ describe("MailpitClient", () => {
       ),
     ).rejects.toThrow("Timeout waiting for messages");
 
-    // With query — error message includes the query string
+    // With query - error message includes the query string
     await expect(
       internalClient.waitForMessages(
         { query: "from:nobody@example.test", count: 5 },
