@@ -33,10 +33,10 @@
     }
   },
   "scripts": {
-    "test:unit": "jest tests/index.spec.ts",
-    "test:e2e": "jest tests/index.e2e.spec.ts --runInBand",
-    "test": "jest",
-    "coverage": "jest --coverage",
+    "test:unit": "vitest run tests/index.spec.ts",
+    "test:e2e": "vitest run tests/index.e2e.spec.ts",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
     "build": "tsdown src/index.ts --dts --format esm,cjs --outDir dist",
     "pretty": "npx prettier . --write",
     "lint": "npx eslint --fix src tests",
@@ -67,20 +67,19 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
-    "@jest/globals": "^30.3.0",
-    "@types/node": "^24.12.2",
+    "@types/node": "^24.12.0",
     "@types/ws": "^8.18.1",
-    "dotenv": "^17.4.2",
+    "@vitest/coverage-v8": "^4.1.2",
+    "@vitest/eslint-plugin": "^1.6.14",
+    "dotenv": "^17.3.1",
     "eslint": "^9.39.4",
-    "eslint-plugin-jest": "^29.15.2",
-    "jest": "^30.3.0",
     "prettier": "^3.8.3",
-    "ts-jest": "^29.4.9",
     "tsdown": "^0.21.8",
     "tsx": "^4.21.0",
     "typedoc": "^0.28.19",
     "typedoc-github-theme": "^0.4.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.58.2"
+    "typescript-eslint": "^8.58.2",
+    "vitest": "^4.1.2"
   }
 }

@@ -17,7 +17,7 @@
     "skipLibCheck": true,
     "strict": true,
     "traceResolution": false,
-    "types": ["node", "jest"],
+    "types": ["node"],
     "module": "esnext",
     "outDir": "dist",
     "target": "esnext"

@@ -1,9 +1,3 @@
-import axios, {
-  type AxiosInstance,
-  type AxiosResponse,
-  type CreateAxiosDefaults,
-  isAxiosError,
-} from "axios";
 import ReconnectingWebSocket from "partysocket/ws";
 import WS from "isomorphic-ws";
 
@@ -12,7 +6,33 @@ import WS from "isomorphic-ws";
 const IS_NATIVE_WEBSOCKET =
   typeof WebSocket !== "undefined" && (WS as unknown) === WebSocket;
 
+/** @internal UTF-8-safe Base64 encoding that works in both Node.js 18+ and browsers. */
+function base64Encode(input: string): string {
+  const bytes = new TextEncoder().encode(input);
+  const binString = String.fromCodePoint(...bytes);
+  return btoa(binString);
+}
+
 // COMMON TYPES
+/** Credentials for HTTP basic authentication. */
+export interface MailpitAuthCredentials {
+  /** The username for basic authentication. */
+  username: string;
+  /** The password for basic authentication. */
+  password: string;
+}
+
+/**
+ * Configuration for a {@link MailpitClient} instance.
+ * @experimental Exported for future use by related packages (e.g., a standalone WebSocket module).
+ */
+export interface MailpitClientConfig {
+  /** The base URL of the Mailpit API (must start with http:// or https://). */
+  baseURL: string;
+  /** Optional basic auth credentials for API and WebSocket connections. */
+  auth?: MailpitAuthCredentials;
+}
+
 /** Represents a name and email address for a request. */
 export interface MailpitEmailAddressRequest {
   /** Email address */
@@ -484,14 +504,6 @@ export interface MailpitChaosTriggersResponse {
   Sender: MailpitChaosTrigger;
 }
 
-/** Response for the {@link MailpitClient.getMessageAttachment |getMessageAttachment()} and {@link MailpitClient.getAttachmentThumbnail | getAttachmentThumbnail()} APIs containing attachment data */
-export interface MailpitAttachmentDataResponse {
-  /** The attachment binary data */
-  data: ArrayBuffer | Buffer;
-  /** The attachment MIME type */
-  contentType: string;
-}
-
 /** Message summary data structure returned in "new" events */
 export type MailpitMessageSummary = MailpitMessageListItem;
 
@@ -586,12 +598,19 @@ export interface MailpitErrorEvent extends MailpitEvent<MailpitErrorData> {
 
 /** Maps event type strings to their corresponding event interfaces */
 export interface MailpitEventMap {
+  /** Event for new messages */
   new: MailpitNewMessageEvent;
+  /** Event for statistics updates */
   stats: MailpitStatsEvent;
+  /** Event for message updates */
   update: MailpitUpdateEvent;
+  /** Event for message deletion */
   delete: MailpitDeleteEvent;
+  /** Event for database pruning */
   prune: MailpitPruneEvent;
+  /** Event for truncating all messages */
   truncate: MailpitTruncateEvent;
+  /** Event for client errors (SMTP/POP3 errors) */
   error: MailpitErrorEvent;
   /** Wildcard event type that matches all events */
   "*": MailpitEvent;
@@ -601,20 +620,11 @@ export interface MailpitEventMap {
 export type MailpitEventType = keyof MailpitEventMap;
 
 /**
- * Client for interacting with the {@link https://mailpit.axllent.org/docs/api-v1/ | Mailpit API}.
- * @example
- * ```typescript
- * import { MailpitClient } from "mailpit-api";
- * const mailpit = new MailpitClient("http://localhost:8025");
- * console.log(await mailpit.getInfo());
- * ```
- */
-/**
  * @internal
  * Internal properties exposed by partysocket's ReconnectingWebSocket and the
  * underlying `ws` WebSocket. Used to prevent the Node.js process from hanging
  * by calling `unref()` on sockets/timers and `terminate()` on disconnect.
- * These properties do not exist on browser WebSocket — all access is guarded
+ * These properties do not exist on browser WebSocket - all access is guarded
  * with optional chaining so it degrades to a no-op in browsers.
  */
 interface ReconnectingWebSocketInternals {
@@ -626,8 +636,29 @@ interface ReconnectingWebSocketInternals {
   _connectTimeout?: { unref?: () => void };
 }
 
+/** @internal Request HTTP methods */
+type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
+
+/** @internal Internal options for HTTP requests */
+interface RequestOptions {
+  // Typed as `object` so named interfaces (e.g. MailpitSearchRequest) are
+  // assignable without requiring an explicit index signature.
+  params?: object;
+  body?: unknown;
+  responseType?: "json" | "blob" | "text";
+}
+
+/**
+ * Client for interacting with the {@link https://mailpit.axllent.org/docs/api-v1/ | Mailpit API}.
+ * @example
+ * ```typescript
+ * import { MailpitClient } from "mailpit-api";
+ * const mailpit = new MailpitClient("http://localhost:8025");
+ * console.log(await mailpit.getInfo());
+ * ```
+ */
 export class MailpitClient {
-  private readonly axiosInstance: AxiosInstance;
+  readonly #authHeader?: string;
   private readonly baseURL: string;
   private readonly wsURL: string;
   private webSocket: ReconnectingWebSocket | null = null;
@@ -640,9 +671,6 @@ export class MailpitClient {
    * @param auth - Optional authentication credentials. Used for both REST API calls and WebSocket connections.
    * @param auth.username - The username for basic authentication.
    * @param auth.password - The password for basic authentication.
-   * @param axiosConfig - Optional additional Axios configuration merged into the underlying `axios.create()` call.
-   * The `baseURL` and `auth` fields are always controlled by the first two parameters and cannot be overridden here.
-   * The `validateStatus` field is also overridden to only resolve successful 200 responses and reject all others.
    * @example No Auth
    * ```typescript
    * const mailpit = new MailpitClient("http://localhost:8025");
@@ -654,23 +682,8 @@ export class MailpitClient {
    *   password: "supersecret"
    * });
    * ```
-   * @example Custom Axios config (e.g. ignore TLS errors and pass cookies)
-   * ```typescript
-   * import https from "https";
-   * const mailpit = new MailpitClient("https://localhost:8025", undefined, {
-   *   httpsAgent: new https.Agent({ rejectUnauthorized: false }),
-   *   headers: { common: { Cookie: "session=abc123" } },
-   * });
-   * ```
    */
-  constructor(
-    baseURL: string,
-    auth?: { username: string; password: string },
-    axiosConfig?: Omit<
-      CreateAxiosDefaults,
-      "baseURL" | "auth" | "validateStatus"
-    >,
-  ) {
+  constructor(baseURL: string, auth?: MailpitAuthCredentials) {
     if (!baseURL || !/^https?:\/\//.test(baseURL)) {
       throw new Error(
         "The value of the 'baseURL' parameter must start with http:// or https://",
@@ -679,62 +692,81 @@ export class MailpitClient {
 
     this.baseURL = baseURL;
     this.wsURL = `${baseURL.replace(/^http/, "ws").replace(/\/?\/$/, "")}/api/events`;
-
-    this.axiosInstance = axios.create({
-      ...axiosConfig,
-      baseURL,
-      auth,
-      validateStatus: function (status) {
-        return status === 200;
-      },
-    });
+    this.#authHeader = auth
+      ? `Basic ${base64Encode(`${auth.username}:${auth.password}`)}`
+      : undefined;
   }
 
   /**
    * @internal
-   * Handles API requests and errors.
-   * @param request - The request function to be executed.
-   * @param options - Optional options for the request.
-   * @returns A promise that resolves to the response data or the full response object.
+   * Thin wrapper around {@link MailpitClient.request} that returns only the response data.
    */
-  private async handleRequest<T>(
-    request: () => Promise<AxiosResponse<T>>,
-    options: { fullResponse: true },
-  ): Promise<AxiosResponse<T>>;
-  private async handleRequest<T>(
-    request: () => Promise<AxiosResponse<T>>,
-    options?: { fullResponse?: false },
-  ): Promise<T>;
-  private async handleRequest<T>(
-    request: () => Promise<AxiosResponse<T>>,
-    options: { fullResponse?: boolean } = { fullResponse: false },
-  ): Promise<T | AxiosResponse<T>> {
-    try {
-      const response = await request();
-      return options.fullResponse ? response : response.data;
-    } catch (error: unknown) {
-      if (isAxiosError(error)) {
-        const url = error.config?.url || "UNKNOWN URL";
-        const method = error.config?.method?.toUpperCase() || "UNKNOWN METHOD";
-        if (error.response) {
-          // Server responded with a status other than 2xx
-          throw new Error(
-            `Mailpit API Error: ${error.response.status.toString()} ${error.response.statusText} at ${method} ${url}: ${JSON.stringify(error.response.data)}`,
-          );
-        } else if (error.request) {
-          // Request was made but no response was received
-          throw new Error(
-            `Mailpit API Error: No response received from server at ${method} ${url}`,
-          );
-        } else {
-          // Something happened in setting up the request
-          throw new Error(
-            `Mailpit API Error: ${(error as Error).toString()} at ${method} ${url}`,
-          );
+  /**
+   * @internal
+   * Fetch wrapper. Builds the URL, sets headers, sends the request,
+   * validates status === 200, parses the response body, and throws descriptive
+   * errors on failure.
+   */
+  private async request<T>(
+    method: HttpMethod,
+    path: string,
+    options: RequestOptions = {},
+  ): Promise<T> {
+    const { params, body, responseType = "json" } = options;
+    // Concatenate to preserve any sub-path in baseURL (e.g. http://host/prefix)
+    const url = new URL(this.baseURL.replace(/\/+$/, "") + path);
+
+    if (params) {
+      for (const [key, value] of Object.entries(params)) {
+        if (value !== undefined && value !== null) {
+          url.searchParams.set(key, String(value as string | number | boolean));
         }
-      } else {
-        throw new Error(`Unexpected Error: ${error as Error}`);
       }
+    }
+
+    const headers: Record<string, string> = {};
+    if (this.#authHeader) {
+      headers["Authorization"] = this.#authHeader;
+    }
+    if (body !== undefined) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    const urlString = url.toString();
+
+    let response: Response;
+    try {
+      response = await globalThis.fetch(urlString, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+    } catch (error: unknown) {
+      // Per the Fetch spec, fetch() only throws TypeError (network or setup failures).
+      throw new Error(
+        `Mailpit API Error: No response received from server at ${method} ${urlString}: ${(error as Error).message}`,
+      );
+    }
+
+    if (response.status !== 200) {
+      const message = await response.text().catch(() => "");
+      throw new Error(
+        `Mailpit API Error: ${String(response.status)} ${response.statusText} at ${method} ${urlString}: ${message}`,
+      );
+    }
+
+    try {
+      if (responseType === "blob") {
+        return (await response.blob()) as T & Blob;
+      } else if (responseType === "text") {
+        return (await response.text()) as T & string;
+      } else {
+        return (await response.json()) as T;
+      }
+    } catch (error: unknown) {
+      throw new Error(
+        `Mailpit API Error: ${(error as Error).toString()} at ${method} ${urlString}`,
+      );
     }
   }
 
@@ -748,9 +780,7 @@ export class MailpitClient {
    * ```
    */
   public async getInfo(): Promise<MailpitInfoResponse> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.get<MailpitInfoResponse>("/api/v1/info"),
-    );
+    return await this.request<MailpitInfoResponse>("GET", "/api/v1/info");
   }
 
   /**
@@ -763,8 +793,9 @@ export class MailpitClient {
    * ```
    */
   public async getConfiguration(): Promise<MailpitConfigurationResponse> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.get<MailpitConfigurationResponse>("/api/v1/webui"),
+    return await this.request<MailpitConfigurationResponse>(
+      "GET",
+      "/api/v1/webui",
     );
   }
 
@@ -780,10 +811,9 @@ export class MailpitClient {
   public async getMessageSummary(
     id: string = "latest",
   ): Promise<MailpitMessageSummaryResponse> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.get<MailpitMessageSummaryResponse>(
-        `/api/v1/message/${id}`,
-      ),
+    return await this.request<MailpitMessageSummaryResponse>(
+      "GET",
+      `/api/v1/message/${id}`,
     );
   }
 
@@ -800,10 +830,9 @@ export class MailpitClient {
   public async getMessageHeaders(
     id: string = "latest",
   ): Promise<MailpitMessageHeadersResponse> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.get<MailpitMessageHeadersResponse>(
-        `/api/v1/message/${id}/headers`,
-      ),
+    return await this.request<MailpitMessageHeadersResponse>(
+      "GET",
+      `/api/v1/message/${id}/headers`,
     );
   }
 
@@ -811,32 +840,22 @@ export class MailpitClient {
    * Retrieves a specific attachment from a message.
    * @param id - Message database ID or "latest"
    * @param partID - The attachment part ID
-   * @returns Attachment as binary data and the content type
+   * @returns The attachment as a `Blob`. Use `blob.type` for the MIME type.
    * @example
    * ```typescript
    * const message = await mailpit.getMessageSummary();
    * if (message.Attachments.length) {
-   *  const attachment = await mailpit.getMessageAttachment(message.ID, message.Attachments[0].PartID);
-   *  // Do something with the attachment data
+   *   const blob = await mailpit.getMessageAttachment(message.ID, message.Attachments[0].PartID);
+   *   console.log(blob.type); // e.g. "application/pdf"
+   *   // Browser: const url = URL.createObjectURL(blob);
+   *   // Node.js: const buffer = Buffer.from(await blob.arrayBuffer());
    * }
    * ```
    */
-  public async getMessageAttachment(
-    id: string,
-    partID: string,
-  ): Promise<MailpitAttachmentDataResponse> {
-    const response = await this.handleRequest(
-      () =>
-        this.axiosInstance.get<ArrayBuffer>(
-          `/api/v1/message/${id}/part/${partID}`,
-          { responseType: "arraybuffer" },
-        ),
-      { fullResponse: true },
-    );
-    return {
-      data: response.data,
-      contentType: response.headers["content-type"] as string,
-    };
+  public async getMessageAttachment(id: string, partID: string): Promise<Blob> {
+    return this.request<Blob>("GET", `/api/v1/message/${id}/part/${partID}`, {
+      responseType: "blob",
+    });
   }
 
   /**
@@ -847,34 +866,26 @@ export class MailpitClient {
    * If the attachment is not an image then a blank image is returned.
    * @param id - Message database ID or "latest"
    * @param partID - The attachment part ID
-   * @returns Image attachment thumbnail as binary data and the content type
+   * @returns The thumbnail as a `Blob`. Use `blob.type` for the MIME type (always `image/jpeg`).
    * @example
    * ```typescript
    * const message = await mailpit.getMessageSummary();
    * if (message.Attachments.length) {
-   *  const thumbnail = await mailpit.getAttachmentThumbnail(message.ID, message.Attachments[0].PartID);
-   *  // Do something with the thumbnail data
+   *   const blob = await mailpit.getAttachmentThumbnail(message.ID, message.Attachments[0].PartID);
+   *   // Browser: const url = URL.createObjectURL(blob);
+   *   // Node.js: const buffer = Buffer.from(await blob.arrayBuffer());
    * }
    * ```
    */
   public async getAttachmentThumbnail(
     id: string,
     partID: string,
-  ): Promise<MailpitAttachmentDataResponse> {
-    const response = await this.handleRequest(
-      () =>
-        this.axiosInstance.get<ArrayBuffer>(
-          `/api/v1/message/${id}/part/${partID}/thumb`,
-          {
-            responseType: "arraybuffer",
-          },
-        ),
-      { fullResponse: true },
+  ): Promise<Blob> {
+    return this.request<Blob>(
+      "GET",
+      `/api/v1/message/${id}/part/${partID}/thumb`,
+      { responseType: "blob" },
     );
-    return {
-      data: response.data,
-      contentType: response.headers["content-type"] as string,
-    };
   }
 
   /**
@@ -887,9 +898,9 @@ export class MailpitClient {
    * ```
    */
   public async getMessageSource(id: string = "latest"): Promise<string> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.get<string>(`/api/v1/message/${id}/raw`),
-    );
+    return await this.request<string>("GET", `/api/v1/message/${id}/raw`, {
+      responseType: "text",
+    });
   }
 
   /**
@@ -907,9 +918,10 @@ export class MailpitClient {
     id: string,
     relayTo: { To: string[] },
   ): Promise<string> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.post<string>(`/api/v1/message/${id}/release`, relayTo),
-    );
+    return await this.request<string>("POST", `/api/v1/message/${id}/release`, {
+      body: relayTo,
+      responseType: "text",
+    });
   }
 
   /**
@@ -928,11 +940,10 @@ export class MailpitClient {
   public async sendMessage(
     sendRequest: MailpitSendRequest,
   ): Promise<MailpitSendMessageConfirmationResponse> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.post<MailpitSendMessageConfirmationResponse>(
-        `/api/v1/send`,
-        sendRequest,
-      ),
+    return await this.request<MailpitSendMessageConfirmationResponse>(
+      "POST",
+      "/api/v1/send",
+      { body: sendRequest },
     );
   }
 
@@ -952,11 +963,10 @@ export class MailpitClient {
     start: number = 0,
     limit: number = 50,
   ): Promise<MailpitMessagesSummaryResponse> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.get<MailpitMessagesSummaryResponse>(
-        `/api/v1/messages`,
-        { params: { start, limit } },
-      ),
+    return await this.request<MailpitMessagesSummaryResponse>(
+      "GET",
+      "/api/v1/messages",
+      { params: { start, limit } },
     );
   }
 
@@ -992,11 +1002,11 @@ export class MailpitClient {
     readStatus: MailpitReadStatusRequest = {},
     params?: MailpitTimeZoneRequest,
   ): Promise<string> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.put<string>(`/api/v1/messages`, readStatus, {
-        params,
-      }),
-    );
+    return await this.request<string>("PUT", "/api/v1/messages", {
+      body: readStatus,
+      params,
+      responseType: "text",
+    });
   }
 
   /**
@@ -1016,11 +1026,10 @@ export class MailpitClient {
   public async deleteMessages(
     deleteRequest?: MailpitDatabaseIDsRequest,
   ): Promise<string> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.delete<string>(`/api/v1/messages`, {
-        data: deleteRequest,
-      }),
-    );
+    return await this.request<string>("DELETE", "/api/v1/messages", {
+      body: deleteRequest,
+      responseType: "text",
+    });
   }
 
   /**
@@ -1039,10 +1048,10 @@ export class MailpitClient {
   public async searchMessages(
     search: MailpitSearchMessagesRequest,
   ): Promise<MailpitMessagesSummaryResponse> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.get<MailpitMessagesSummaryResponse>(`/api/v1/search`, {
-        params: search,
-      }),
+    return await this.request<MailpitMessagesSummaryResponse>(
+      "GET",
+      "/api/v1/search",
+      { params: search },
     );
   }
 
@@ -1192,9 +1201,10 @@ export class MailpitClient {
   public async deleteMessagesBySearch(
     search: MailpitSearchRequest,
   ): Promise<string> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.delete<string>(`/api/v1/search`, { params: search }),
-    );
+    return await this.request<string>("DELETE", "/api/v1/search", {
+      params: search,
+      responseType: "text",
+    });
   }
 
   /**
@@ -1209,10 +1219,9 @@ export class MailpitClient {
   public async htmlCheck(
     id: string = "latest",
   ): Promise<MailpitHTMLCheckResponse> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.get<MailpitHTMLCheckResponse>(
-        `/api/v1/message/${id}/html-check`,
-      ),
+    return await this.request<MailpitHTMLCheckResponse>(
+      "GET",
+      `/api/v1/message/${id}/html-check`,
     );
   }
 
@@ -1230,11 +1239,10 @@ export class MailpitClient {
     id: string = "latest",
     follow: boolean = false,
   ): Promise<MailpitLinkCheckResponse> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.get<MailpitLinkCheckResponse>(
-        `/api/v1/message/${id}/link-check`,
-        { params: { follow } },
-      ),
+    return await this.request<MailpitLinkCheckResponse>(
+      "GET",
+      `/api/v1/message/${id}/link-check`,
+      { params: { follow } },
     );
   }
 
@@ -1250,10 +1258,9 @@ export class MailpitClient {
   public async spamAssassinCheck(
     id: string = "latest",
   ): Promise<MailpitSpamAssassinResponse> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.get<MailpitSpamAssassinResponse>(
-        `/api/v1/message/${id}/sa-check`,
-      ),
+    return await this.request<MailpitSpamAssassinResponse>(
+      "GET",
+      `/api/v1/message/${id}/sa-check`,
     );
   }
 
@@ -1266,9 +1273,7 @@ export class MailpitClient {
    * ```
    */
   public async getTags(): Promise<string[]> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.get<string[]>(`/api/v1/tags`),
-    );
+    return await this.request<string[]>("GET", "/api/v1/tags");
   }
 
   /**
@@ -1287,9 +1292,10 @@ export class MailpitClient {
    * ```
    */
   public async setTags(request: MailpitSetTagsRequest): Promise<string> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.put<string>(`/api/v1/tags`, request),
-    );
+    return await this.request<string>("PUT", "/api/v1/tags", {
+      body: request,
+      responseType: "text",
+    });
   }
 
   /**
@@ -1307,11 +1313,10 @@ export class MailpitClient {
    */
   public async renameTag(tag: string, newTagName: string): Promise<string> {
     const encodedTag = encodeURIComponent(tag);
-    return await this.handleRequest(() =>
-      this.axiosInstance.put<string>(`/api/v1/tags/${encodedTag}`, {
-        Name: newTagName,
-      }),
-    );
+    return await this.request<string>("PUT", `/api/v1/tags/${encodedTag}`, {
+      body: { Name: newTagName },
+      responseType: "text",
+    });
   }
 
   /**
@@ -1326,9 +1331,9 @@ export class MailpitClient {
    */
   public async deleteTag(tag: string): Promise<string> {
     const encodedTag = encodeURIComponent(tag);
-    return await this.handleRequest(() =>
-      this.axiosInstance.delete<string>(`/api/v1/tags/${encodedTag}`),
-    );
+    return await this.request<string>("DELETE", `/api/v1/tags/${encodedTag}`, {
+      responseType: "text",
+    });
   }
 
   /**
@@ -1341,8 +1346,9 @@ export class MailpitClient {
    * ```
    */
   public async getChaosTriggers(): Promise<MailpitChaosTriggersResponse> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.get<MailpitChaosTriggersResponse>("/api/v1/chaos"),
+    return await this.request<MailpitChaosTriggersResponse>(
+      "GET",
+      "/api/v1/chaos",
     );
   }
 
@@ -1362,11 +1368,10 @@ export class MailpitClient {
   public async setChaosTriggers(
     triggers: MailpitChaosTriggersRequest = {},
   ): Promise<MailpitChaosTriggersResponse> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.put<MailpitChaosTriggersResponse>(
-        "/api/v1/chaos",
-        triggers,
-      ),
+    return await this.request<MailpitChaosTriggersResponse>(
+      "PUT",
+      "/api/v1/chaos",
+      { body: triggers },
     );
   }
 
@@ -1392,9 +1397,10 @@ export class MailpitClient {
     id: string = "latest",
     embed?: 1,
   ): Promise<string> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.get<string>(`/view/${id}.html`, { params: { embed } }),
-    );
+    return await this.request<string>("GET", `/view/${id}.html`, {
+      params: { embed },
+      responseType: "text",
+    });
   }
 
   /**
@@ -1407,9 +1413,9 @@ export class MailpitClient {
    * ```
    */
   public async renderMessageText(id: string = "latest"): Promise<string> {
-    return await this.handleRequest(() =>
-      this.axiosInstance.get<string>(`/view/${id}.txt`),
-    );
+    return await this.request<string>("GET", `/view/${id}.txt`, {
+      responseType: "text",
+    });
   }
 
   /**
@@ -1431,10 +1437,10 @@ export class MailpitClient {
     // entirely to avoid passing an options object where the native WebSocket
     // constructor expects only an optional protocols string/array.
     const wsOptions: WS.ClientOptions | undefined =
-      !IS_NATIVE_WEBSOCKET && this.axiosInstance.defaults.auth
+      !IS_NATIVE_WEBSOCKET && this.#authHeader
         ? {
             headers: {
-              Authorization: `Basic ${btoa(`${this.axiosInstance.defaults.auth.username}:${this.axiosInstance.defaults.auth.password}`)}`,
+              Authorization: this.#authHeader,
             },
           }
         : undefined;
