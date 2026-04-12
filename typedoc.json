@@ -1,6 +1,7 @@
 {
   "plugin": ["typedoc-github-theme"],
   "out": "./docs",
-  "entryPoints": ["./src/index.ts"],
+  "entryPointStrategy": "packages",
+  "entryPoints": ["packages/mailpit-api", "packages/mailpit-ws"],
   "includeVersion": true
 }
