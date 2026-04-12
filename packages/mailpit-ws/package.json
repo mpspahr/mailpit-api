@@ -1,0 +1,74 @@
+{
+  "name": "mailpit-ws",
+  "version": "1.0.0",
+  "description": "A TypeScript WebSocket client for Mailpit real-time events.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mpspahr/mailpit-api.git",
+    "directory": "packages/mailpit-ws"
+  },
+  "homepage": "https://mpspahr.github.io/mailpit-api/",
+  "bugs": {
+    "url": "https://github.com/mpspahr/mailpit-api/issues"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "provenance": true,
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsdown src/index.ts --dts --format esm,cjs --outDir dist"
+  },
+  "keywords": [
+    "mailpit",
+    "websocket",
+    "ws",
+    "events",
+    "real-time",
+    "email",
+    "typescript",
+    "test",
+    "playwright",
+    "e2e",
+    "nodejs",
+    "testing",
+    "automation"
+  ],
+  "author": "Matthew Spahr",
+  "license": "MIT",
+  "dependencies": {
+    "isomorphic-ws": "^5.0.0",
+    "partysocket": "^1.1.10",
+    "ws": "^8.18.3"
+  },
+  "peerDependencies": {
+    "mailpit-api": "^2.0.0"
+  },
+  "typedocOptions": {
+    "entryPoints": [
+      "./src/index.ts"
+    ]
+  }
+}

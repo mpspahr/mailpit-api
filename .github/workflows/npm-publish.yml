@@ -1,10 +1,13 @@
-# This workflow is triggered on the creation of a new release.
-# It runs tests and, if successful, builds and publishes the package to NPM.
+# This workflow is triggered when a version tag is pushed.
+# It runs tests and, if successful, builds and publishes the tagged package to NPM.
+# Tags must follow the format: mailpit-api@x.y.z or mailpit-ws@x.y.z
 name: Publish Release to NPM
 
 on:
-  release:
-    types: [created]
+  push:
+    tags:
+      - "mailpit-api@*"
+      - "mailpit-ws@*"
 
 concurrency:
   group: "npm-publish-${{ github.ref }}"
@@ -22,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v6
@@ -34,7 +37,22 @@ jobs:
           registry-url: https://registry.npmjs.org/
       - run: npm ci
       - run: npm run build
-      - run: npm publish
+      - name: Determine package to publish
+        id: pkg
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          PACKAGE_NAME="${TAG%@*}"
+          VERSION="${TAG##*@}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing $PACKAGE_NAME@$VERSION"
+      - name: Publish to npm
+        run: npm publish --workspace packages/${{ steps.pkg.outputs.name }} --provenance --access public
+      - name: Create GitHub Release
+        run: gh release create "${{ steps.pkg.outputs.tag }}" --generate-notes --title "${{ steps.pkg.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   call-docs:
     needs: publish

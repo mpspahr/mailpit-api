@@ -4,27 +4,32 @@ import { describe, test, expect, afterAll, afterEach } from "vitest";
 import {
   MailpitClient,
   type MailpitConfigurationResponse,
-  type MailpitEvent,
   type MailpitSendRequest,
-} from "../src/index";
+} from "mailpit-api";
+import { MailpitEvents, type MailpitEvent } from "mailpit-ws";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-describe("MailpitClient E2E Tests", () => {
+describe("Mailpit E2E Tests", () => {
   // Ensure required environment variables are set
   const { HOST = "localhost", PORT = "8025", USERNAME, PASSWORD } = process.env;
   if (!USERNAME || !PASSWORD) {
     throw new Error("Missing required environment variables");
   }
 
-  // Initialize MailpitClient with environment variables
+  // Initialize clients with environment variables
   const mailpit = new MailpitClient(`http://${HOST}:${PORT}`, {
     username: USERNAME,
     password: PASSWORD,
   });
 
-  // Attachemnt file setup
+  const events = new MailpitEvents(`http://${HOST}:${PORT}`, {
+    username: USERNAME,
+    password: PASSWORD,
+  });
+
+  // Attachment file setup
   const fileName = "test.png";
   const filePath = path.resolve(__dirname, fileName);
   const fileContent = fs.readFileSync(filePath).toString("base64");
@@ -96,7 +101,7 @@ describe("MailpitClient E2E Tests", () => {
     tags: expect.any(Array<string>),
     total: expect.any(Number),
     unread: expect.any(Number),
-    count: expect.any(Number), // depreated but stll returned
+    count: expect.any(Number), // deprecated but still returned
   };
 
   const statsEvent = {
@@ -109,14 +114,14 @@ describe("MailpitClient E2E Tests", () => {
   };
 
   afterAll(async () => {
-    mailpit.disconnect();
+    events.disconnect();
     await mailpit.deleteMessages();
   });
 
   test("sendMessage() should send message and trigger WebSocket events", async () => {
     // Set up WebSocket event promises before action
-    const newEventPromise = mailpit.waitForEvent("new");
-    const statsEventPromise = mailpit.waitForEvent("stats");
+    const newEventPromise = events.waitForEvent("new");
+    const statsEventPromise = events.waitForEvent("stats");
 
     const sendResponse = await mailpit.sendMessage(sendRequest);
     expect(sendResponse).toEqual({
@@ -286,8 +291,8 @@ describe("MailpitClient E2E Tests", () => {
 
     test("setReadStatus() should update the read status of a message and trigger WebSocket events", async () => {
       // Set up WebSocket event promises before action
-      const updateEventPromise = mailpit.waitForEvent("update");
-      const statsEventPromise = mailpit.waitForEvent("stats");
+      const updateEventPromise = events.waitForEvent("update");
+      const statsEventPromise = events.waitForEvent("stats");
 
       const response = await mailpit.setReadStatus({
         IDs: [messageId],
@@ -448,7 +453,7 @@ describe("MailpitClient E2E Tests", () => {
     });
     test("setTags() should set tags for a message and trigger WebSocket events", async () => {
       // Set up WebSocket event promises before action
-      const updateEventPromise = mailpit.waitForEvent("update");
+      const updateEventPromise = events.waitForEvent("update");
 
       const response = await mailpit.setTags({
         IDs: [messageId],
@@ -544,8 +549,8 @@ describe("MailpitClient E2E Tests", () => {
       };
 
       // Set up WebSocket event promises before action
-      const deleteEventPromise = mailpit.waitForEvent("delete");
-      const statsEventPromise = mailpit.waitForEvent("stats");
+      const deleteEventPromise = events.waitForEvent("delete");
+      const statsEventPromise = events.waitForEvent("stats");
 
       const response = await mailpit.deleteMessagesBySearch(searchRequest);
       expect(response).toBe("ok");
@@ -568,8 +573,8 @@ describe("MailpitClient E2E Tests", () => {
 
     test("deleteMessages() w/ID should delete a message and trigger WebSocket events", async () => {
       // Set up WebSocket event promises before action
-      const deleteEventPromise = mailpit.waitForEvent("delete");
-      const statsEventPromise = mailpit.waitForEvent("stats");
+      const deleteEventPromise = events.waitForEvent("delete");
+      const statsEventPromise = events.waitForEvent("stats");
 
       const response = await mailpit.deleteMessages({ IDs: [messageId] });
       expect(response).toBe("ok");
@@ -592,8 +597,8 @@ describe("MailpitClient E2E Tests", () => {
 
     test("deleteMessages() w/o ID should delete all messages and trigger WebSocket events", async () => {
       // Set up WebSocket event promise before action
-      const truncateEventPromise = mailpit.waitForEvent("truncate");
-      const statsEventPromise = mailpit.waitForEvent("stats");
+      const truncateEventPromise = events.waitForEvent("truncate");
+      const statsEventPromise = events.waitForEvent("stats");
 
       // Delete all messages
       const response = await mailpit.deleteMessages();
@@ -644,20 +649,22 @@ describe("MailpitClient E2E Tests", () => {
 
   describe("WebSocket Behavior", () => {
     test("should handle wildcard '*' event type for collecting all events", async () => {
-      const events: MailpitEvent[] = [];
-      const removeListener = mailpit.onEvent("*", (event) => {
+      const collectedEvents: MailpitEvent[] = [];
+      const removeListener = events.onEvent("*", (event) => {
         // Wildcard listener collects all events uniformly
-        events.push(event);
+        collectedEvents.push(event);
       });
 
       // Send a message to trigger events
       const sendResponse = await mailpit.sendMessage(sendRequest);
 
       // Wait for events to arrive
-      expect(await waitForCondition(() => events.length >= 2, 5000)).toBe(true);
+      expect(
+        await waitForCondition(() => collectedEvents.length >= 2, 5000),
+      ).toBe(true);
 
-      expect(events.some((e) => e.Type === "new")).toBe(true);
-      expect(events.some((e) => e.Type === "stats")).toBe(true);
+      expect(collectedEvents.some((e) => e.Type === "new")).toBe(true);
+      expect(collectedEvents.some((e) => e.Type === "stats")).toBe(true);
 
       // Clean up
       await mailpit.deleteMessages({ IDs: [sendResponse.ID] });

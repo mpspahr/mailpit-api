@@ -1,69 +1,29 @@
 {
-  "name": "mailpit-api",
-  "version": "1.8.2",
-  "description": "A TypeScript client for interacting with Mailpit's REST API.",
+  "private": true,
+  "name": "mailpit-monorepo",
+  "description": "Monorepo for mailpit-api and mailpit-ws packages",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mpspahr/mailpit-api.git"
   },
-  "homepage": "https://mpspahr.github.io/mailpit-api/",
-  "bugs": {
-    "url": "https://github.com/mpspahr/mailpit-api/issues"
-  },
-  "publishConfig": {
-    "registry": "https://registry.npmjs.org/",
-    "provenance": true,
-    "access": "public"
-  },
+  "workspaces": [
+    "packages/*"
+  ],
   "engines": {
     "node": ">=18.0.0"
   },
-  "main": "dist/index.cjs",
-  "module": "dist/index.mjs",
-  "exports": {
-    ".": {
-      "import": {
-        "types": "./dist/index.d.mts",
-        "default": "./dist/index.mjs"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
-    }
-  },
   "scripts": {
-    "test:unit": "vitest run tests/index.spec.ts",
-    "test:e2e": "vitest run tests/index.e2e.spec.ts",
+    "build": "npm run build --workspaces",
     "test": "vitest run",
+    "test:unit": "vitest run --project mailpit-api --project mailpit-ws",
+    "test:e2e": "vitest run --project e2e",
     "coverage": "vitest run --coverage",
-    "build": "tsdown src/index.ts --dts --format esm,cjs --outDir dist",
     "pretty": "npx prettier . --write",
-    "lint": "npx eslint --fix src tests",
+    "lint": "npx eslint --fix packages/*/src packages/*/tests tests",
     "docs": "typedoc"
   },
-  "keywords": [
-    "mailpit",
-    "api",
-    "client",
-    "email",
-    "smtp",
-    "typescript",
-    "test",
-    "playwright",
-    "e2e",
-    "nodejs",
-    "testing",
-    "automation",
-    "integration"
-  ],
   "author": "Matthew Spahr",
   "license": "MIT",
-  "dependencies": {
-    "isomorphic-ws": "^5.0.0",
-    "partysocket": "^1.1.10",
-    "ws": "^8.18.3"
-  },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
     "@types/node": "^24.12.0",

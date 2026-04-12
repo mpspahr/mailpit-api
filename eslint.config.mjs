@@ -16,7 +16,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["tests/**/*.spec.ts"],
+    files: ["packages/*/tests/**/*.spec.ts", "tests/**/*.spec.ts"],
     plugins: { vitest },
     rules: {
       ...vitest.configs.recommended.rules,

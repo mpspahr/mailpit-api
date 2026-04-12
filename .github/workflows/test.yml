@@ -61,8 +61,17 @@ jobs:
           npm ls --depth=0
       - name: Run All Tests
         run: npm run test
-      - name: Upload coverage to Codecov
+      - name: Upload mailpit-api coverage to Codecov
         if: matrix.node-version == 24 && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          flags: mailpit-api
+          files: coverage/lcov.info
+      - name: Upload mailpit-ws coverage to Codecov
+        if: matrix.node-version == 24 && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: mailpit-ws
+          files: coverage/lcov.info
