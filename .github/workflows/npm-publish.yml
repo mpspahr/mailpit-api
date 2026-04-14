@@ -16,10 +16,6 @@ jobs:
       contents: read
       pull-requests: read
     uses: ./.github/workflows/test.yml
-    with:
-      username: ${{ github.actor }}
-    secrets:
-      password: ${{ secrets.MP_PASSWORD }}
 
   publish:
     needs: call-tests
