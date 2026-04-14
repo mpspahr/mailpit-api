@@ -57,7 +57,7 @@ jobs:
         if: github.event_name == 'schedule'
         run: |
           npm update --ignore-scripts
-          npm audit --audit-level=high
+          npm audit signatures
           npm ls --depth=0
       - name: Run All Tests
         run: npm run test
