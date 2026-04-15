@@ -1,6 +1,7 @@
 import axios, {
   type AxiosInstance,
   type AxiosResponse,
+  type CreateAxiosDefaults,
   isAxiosError,
 } from "axios";
 import ReconnectingWebSocket from "partysocket/ws";
@@ -639,6 +640,9 @@ export class MailpitClient {
    * @param auth - Optional authentication credentials. Used for both REST API calls and WebSocket connections.
    * @param auth.username - The username for basic authentication.
    * @param auth.password - The password for basic authentication.
+   * @param axiosConfig - Optional additional Axios configuration merged into the underlying `axios.create()` call.
+   * The `baseURL` and `auth` fields are always controlled by the first two parameters and cannot be overridden here.
+   * The `validateStatus` field is also overridden to only resolve successful 200 responses and reject all others.
    * @example No Auth
    * ```typescript
    * const mailpit = new MailpitClient("http://localhost:8025");
@@ -650,8 +654,23 @@ export class MailpitClient {
    *   password: "supersecret"
    * });
    * ```
+   * @example Custom Axios config (e.g. ignore TLS errors and pass cookies)
+   * ```typescript
+   * import https from "https";
+   * const mailpit = new MailpitClient("https://localhost:8025", undefined, {
+   *   httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+   *   headers: { common: { Cookie: "session=abc123" } },
+   * });
+   * ```
    */
-  constructor(baseURL: string, auth?: { username: string; password: string }) {
+  constructor(
+    baseURL: string,
+    auth?: { username: string; password: string },
+    axiosConfig?: Omit<
+      CreateAxiosDefaults,
+      "baseURL" | "auth" | "validateStatus"
+    >,
+  ) {
     if (!baseURL || !/^https?:\/\//.test(baseURL)) {
       throw new Error(
         "The value of the 'baseURL' parameter must start with http:// or https://",
@@ -662,6 +681,7 @@ export class MailpitClient {
     this.wsURL = `${baseURL.replace(/^http/, "ws")}/api/events`;
 
     this.axiosInstance = axios.create({
+      ...axiosConfig,
       baseURL,
       auth,
       validateStatus: function (status) {
