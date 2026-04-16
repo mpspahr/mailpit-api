@@ -209,6 +209,21 @@ describe("MailpitClient", () => {
     );
   });
 
+  test("should pass axiosConfig to axios.create() while keeping baseURL and auth override", () => {
+    new MailpitClient(
+      "https://localhost:8025",
+      { username: "u", password: "p" },
+      { headers: { common: { Cookie: "session=abc" } } },
+    );
+    expect(axios.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseURL: "https://localhost:8025",
+        auth: { username: "u", password: "p" },
+        headers: { common: { Cookie: "session=abc" } },
+      }),
+    );
+  });
+
   // WebSocket configuration tests (connection behavior is tested in E2E)
   test("should not auto-connect WebSocket by default", () => {
     const client = new MailpitClient("http://localhost:8025");
