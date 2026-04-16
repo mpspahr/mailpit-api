@@ -96,7 +96,7 @@ describe("MailpitClient", () => {
     mockedAxios.put.mockResolvedValue({ data: "ok" });
     const result = await client.setReadStatus();
     expect(mockedAxios.put).toHaveBeenCalledWith(
-      "/api/v1/messages",
+      "api/v1/messages",
       {},
       {
         params: undefined,
@@ -110,7 +110,7 @@ describe("MailpitClient", () => {
     mockedAxios.post.mockResolvedValue({ data: "ok" });
     const result = await client.releaseMessage("id", { To: ["a@b.com"] });
     expect(mockedAxios.post).toHaveBeenCalledWith(
-      "/api/v1/message/id/release",
+      "api/v1/message/id/release",
       { To: ["a@b.com"] },
     );
     expect(result).toBe("ok");
@@ -121,7 +121,7 @@ describe("MailpitClient", () => {
     mockedAxios.get.mockResolvedValue({ data: mockData });
     const result = await client.spamAssassinCheck();
     expect(mockedAxios.get).toHaveBeenCalledWith(
-      "/api/v1/message/latest/sa-check",
+      "api/v1/message/latest/sa-check",
     );
     expect(result).toEqual(mockData);
   });
@@ -144,14 +144,14 @@ describe("MailpitClient", () => {
   test("should call getChaosTriggers() and return triggers", async () => {
     mockedAxios.get.mockResolvedValue({ data: mockData });
     const result = await client.getChaosTriggers();
-    expect(mockedAxios.get).toHaveBeenCalledWith("/api/v1/chaos");
+    expect(mockedAxios.get).toHaveBeenCalledWith("api/v1/chaos");
     expect(result).toEqual(mockData);
   });
 
   test("should call setChaosTriggers() and return ok", async () => {
     mockedAxios.put.mockResolvedValue({ data: mockData });
     const result = await client.setChaosTriggers();
-    expect(mockedAxios.put).toHaveBeenCalledWith("/api/v1/chaos", {});
+    expect(mockedAxios.put).toHaveBeenCalledWith("api/v1/chaos", {});
     expect(result).toEqual(mockData);
   });
 
@@ -165,7 +165,7 @@ describe("MailpitClient", () => {
     const error = {
       name: "AxiosError",
       message: "Response Error",
-      config: { url: "/api/v1/info", method: "GET" },
+      config: { url: "api/v1/info", method: "GET" },
       response: {
         status: 500,
         data: "Boom!",
@@ -175,19 +175,19 @@ describe("MailpitClient", () => {
     };
     mockedAxios.get.mockRejectedValue(error);
     await expect(client.getInfo()).rejects.toThrow(
-      'Mailpit API Error: 500 Internal Server Error at GET /api/v1/info: "Boom!"',
+      'Mailpit API Error: 500 Internal Server Error at GET api/v1/info: "Boom!"',
     );
   });
 
   test("should handle AxiosError without a response but with a request", async () => {
     const error = {
       name: "AxiosError",
-      config: { url: "/api/v1/info", method: "GET" },
+      config: { url: "api/v1/info", method: "GET" },
       request: {},
     };
     mockedAxios.get.mockRejectedValue(error);
     await expect(client.getInfo()).rejects.toThrow(
-      "Mailpit API Error: No response received from server at GET /api/v1/info",
+      "Mailpit API Error: No response received from server at GET api/v1/info",
     );
   });
 
@@ -441,10 +441,10 @@ describe("MailpitClient", () => {
       query: "subject:Test",
     });
 
-    expect(mockedAxios.get).toHaveBeenCalledWith("/api/v1/search", {
+    expect(mockedAxios.get).toHaveBeenCalledWith("api/v1/search", {
       params: { query: "subject:Test" },
     });
-    expect(mockedAxios.get).toHaveBeenCalledWith("/api/v1/message/msg-1");
+    expect(mockedAxios.get).toHaveBeenCalledWith("api/v1/message/msg-1");
     expect(mockedAxios.get).toHaveBeenCalledTimes(3);
     expect(result).toEqual(mockFullMessage);
   });
@@ -468,7 +468,7 @@ describe("MailpitClient", () => {
     const result = await internalClient.waitForMessages();
 
     expect(result.messages_count).toBe(1);
-    expect(mockedAxios.get).toHaveBeenCalledWith("/api/v1/messages", {
+    expect(mockedAxios.get).toHaveBeenCalledWith("api/v1/messages", {
       params: { start: 0, limit: 50 },
     });
   });
@@ -481,7 +481,7 @@ describe("MailpitClient", () => {
       { timeout: 1000, interval: 50 },
     );
 
-    expect(mockedAxios.get).toHaveBeenCalledWith("/api/v1/search", {
+    expect(mockedAxios.get).toHaveBeenCalledWith("api/v1/search", {
       params: { query: "from:test@example.test" },
     });
   });

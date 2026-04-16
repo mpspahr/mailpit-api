@@ -642,7 +642,7 @@ describe("MailpitClient E2E Tests", () => {
     test("invalid host (request)", async () => {
       const invalidUrlMailpit = new MailpitClient("http://invalid-host:9999");
       await expect(invalidUrlMailpit.getInfo()).rejects.toThrow(
-        "Mailpit API Error: No response received from server at GET /api/v1/info",
+        "Mailpit API Error: No response received from server at GET api/v1/info",
       );
     });
   });
