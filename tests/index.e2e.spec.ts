@@ -13,13 +13,13 @@ dotenv.config();
 
 describe("MailpitClient E2E Tests", () => {
   // Ensure required environment variables are set
-  const { HOST = "localhost", PORT = "8025", USERNAME, PASSWORD } = process.env;
+  const { BASEURL = "http://localhost:8025", USERNAME, PASSWORD } = process.env;
   if (!USERNAME || !PASSWORD) {
     throw new Error("Missing required environment variables");
   }
 
   // Initialize MailpitClient with environment variables
-  const mailpit = new MailpitClient(`http://${HOST}:${PORT}`, {
+  const mailpit = new MailpitClient(BASEURL, {
     username: USERNAME,
     password: PASSWORD,
   });
@@ -629,7 +629,7 @@ describe("MailpitClient E2E Tests", () => {
     test("invalid authentication (response)", async () => {
       // Note: This test only works if Mailpit has authentication enabled.
       // If authentication is disabled, this test will pass by default.
-      const invalidAuthMailpit = new MailpitClient(`http://${HOST}:${PORT}`, {
+      const invalidAuthMailpit = new MailpitClient(BASEURL, {
         username: "invalid-user",
         password: "invalid-password",
       });

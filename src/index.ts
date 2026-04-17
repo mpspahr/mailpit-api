@@ -678,7 +678,7 @@ export class MailpitClient {
     }
 
     this.baseURL = baseURL;
-    this.wsURL = `${baseURL.replace(/^http/, "ws")}/api/events`;
+    this.wsURL = `${baseURL.replace(/^http/, "ws").replace(/\/?\/$/, "")}/api/events`;
 
     this.axiosInstance = axios.create({
       ...axiosConfig,
