@@ -10,10 +10,10 @@ TypeScript clients for interacting with [Mailpit](https://mailpit.axllent.org/).
 
 ## Packages
 
-| Package | Description | Docs |
-| ------- | ----------- | ---- |
-| [`mailpit-api`](https://github.com/mpspahr/mailpit-api/tree/main/packages/mailpit-api) | REST API client - zero dependencies | [API Reference](https://mpspahr.github.io/mailpit-api/modules/mailpit-api.html) |
-| [`mailpit-ws`](https://github.com/mpspahr/mailpit-api/tree/main/packages/mailpit-ws) | WebSocket client for real-time events | [API Reference](https://mpspahr.github.io/mailpit-api/modules/mailpit-ws.html) |
+| Package                                                                                | Description                           | Docs                                                                            |
+| -------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------- |
+| [`mailpit-api`](https://github.com/mpspahr/mailpit-api/tree/main/packages/mailpit-api) | REST API client - zero dependencies   | [API Reference](https://mpspahr.github.io/mailpit-api/modules/mailpit-api.html) |
+| [`mailpit-ws`](https://github.com/mpspahr/mailpit-api/tree/main/packages/mailpit-ws)   | WebSocket client for real-time events | [API Reference](https://mpspahr.github.io/mailpit-api/modules/mailpit-ws.html)  |
 
 ## Quick Start
 

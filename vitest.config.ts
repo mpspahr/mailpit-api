@@ -33,8 +33,14 @@ export default defineConfig({
       {
         resolve: {
           alias: {
-            "mailpit-api": resolve(__dirname, "packages/mailpit-api/src/index.ts"),
-            "mailpit-ws": resolve(__dirname, "packages/mailpit-ws/src/index.ts"),
+            "mailpit-api": resolve(
+              __dirname,
+              "packages/mailpit-api/src/index.ts",
+            ),
+            "mailpit-ws": resolve(
+              __dirname,
+              "packages/mailpit-ws/src/index.ts",
+            ),
           },
         },
         test: {

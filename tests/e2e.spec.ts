@@ -24,7 +24,7 @@ describe("Mailpit E2E Tests", () => {
     password: PASSWORD,
   });
 
-  const events = new MailpitEvents(`http://${HOST}:${PORT}`, {
+  const events = new MailpitEvents(BASEURL, {
     username: USERNAME,
     password: PASSWORD,
   });
