@@ -1,14 +1,13 @@
 {
   "compilerOptions": {
-    "allowJs": true,
     "allowSyntheticDefaultImports": true,
     "declaration": true,
     "esModuleInterop": true,
     "inlineSourceMap": false,
-    "lib": ["esnext"],
+    "lib": ["ES2022"],
     "listEmittedFiles": false,
     "listFiles": false,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "noFallthroughCasesInSwitch": true,
     "pretty": true,
     "resolveJsonModule": true,
@@ -16,8 +15,8 @@
     "strict": true,
     "traceResolution": false,
     "types": ["node"],
-    "module": "esnext",
-    "target": "esnext"
+    "module": "ESNext",
+    "target": "ES2022"
   },
   "compileOnSave": false,
   "exclude": ["node_modules", "dist", "test", "docs", "coverage"]

@@ -1,8 +1,9 @@
 import eslint from "@eslint/js";
 import vitest from "@vitest/eslint-plugin";
-import tseslint from "typescript-eslint";
+import { defineConfig } from 'eslint/config';
+import tseslint from 'typescript-eslint';
 
-export default tseslint.config(
+export default defineConfig(
   eslint.configs.recommended,
   tseslint.configs.strictTypeChecked,
   {
