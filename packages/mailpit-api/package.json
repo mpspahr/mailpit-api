@@ -7,7 +7,7 @@
     "url": "git+https://github.com/mpspahr/mailpit-api.git",
     "directory": "packages/mailpit-api"
   },
-  "homepage": "https://mpspahr.github.io/mailpit-api/",
+  "homepage": "https://mpspahr.github.io/mailpit-api/modules/mailpit-api.html",
   "bugs": {
     "url": "https://github.com/mpspahr/mailpit-api/issues"
   },
