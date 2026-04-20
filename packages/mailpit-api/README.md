@@ -1,7 +1,9 @@
 # mailpit-api
 
 [![Package Version](https://img.shields.io/npm/v/mailpit-api.svg?label=npm)](https://www.npmjs.com/package/mailpit-api)
-[![Documentation](https://github.com/mpspahr/mailpit-api/actions/workflows/deploy-docs.yml/badge.svg?branch=main&label=docs)](https://mpspahr.github.io/mailpit-api/)
+[![Test Suite](https://github.com/mpspahr/mailpit-api/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/mpspahr/mailpit-api/actions/workflows/test.yml)
+[![Code Coverage](https://codecov.io/gh/mpspahr/mailpit-api/graph/badge.svg?token=VUWKIYK1WM&flag=mailpit-api)](https://codecov.io/gh/mpspahr/mailpit-api)
+[![Documentation](https://github.com/mpspahr/mailpit-api/actions/workflows/deploy-docs.yml/badge.svg?branch=main&label=docs)](https://mpspahr.github.io/mailpit-api/modules/mailpit-api.html)
 
 A zero-dependency TypeScript client for interacting with [Mailpit](https://mailpit.axllent.org/)'s [REST API](https://mailpit.axllent.org/docs/api-v1/view.html#get-/api/v1/info). Ideal for automating your email testing. Works in **Node.js, browser, and any modern JS runtime**.
 
@@ -15,7 +17,7 @@ npm install mailpit-api
 
 ## Documentation
 
-[Detailed documentation](https://mpspahr.github.io/mailpit-api/) covering all available methods and type definitions.
+[Detailed documentation](https://mpspahr.github.io/mailpit-api/modules/mailpit-api.html) covering all available methods and type definitions.
 
 ## Usage
 

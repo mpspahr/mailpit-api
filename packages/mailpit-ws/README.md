@@ -1,7 +1,9 @@
 # mailpit-ws
 
 [![Package Version](https://img.shields.io/npm/v/mailpit-ws.svg?label=npm)](https://www.npmjs.com/package/mailpit-ws)
-[![Documentation](https://github.com/mpspahr/mailpit-api/actions/workflows/deploy-docs.yml/badge.svg?branch=main&label=docs)](https://mpspahr.github.io/mailpit-api/)
+[![Test Suite](https://github.com/mpspahr/mailpit-api/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/mpspahr/mailpit-api/actions/workflows/test.yml)
+[![Code Coverage](https://codecov.io/gh/mpspahr/mailpit-api/graph/badge.svg?token=VUWKIYK1WM&flag=mailpit-ws)](https://codecov.io/gh/mpspahr/mailpit-api)
+[![Documentation](https://github.com/mpspahr/mailpit-api/actions/workflows/deploy-docs.yml/badge.svg?branch=main&label=docs)](https://mpspahr.github.io/mailpit-api/modules/mailpit-ws.html)
 
 A TypeScript WebSocket client for [Mailpit](https://mailpit.axllent.org/)'s real-time event stream. Get instant notifications when messages are received, updated, or deleted. Works in **Node.js, browser, and any modern JS runtime**.
 
@@ -17,7 +19,7 @@ npm install mailpit-api mailpit-ws
 
 ## Documentation
 
-[Detailed documentation](https://mpspahr.github.io/mailpit-api/) covering all available methods and type definitions.
+[Detailed documentation](https://mpspahr.github.io/mailpit-api/modules/mailpit-ws.html) covering all available methods and type definitions.
 
 ## Usage
 
