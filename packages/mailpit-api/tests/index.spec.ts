@@ -150,6 +150,47 @@ describe("MailpitClient", () => {
     );
   });
 
+  test("should pass fetchOptions to every request", async () => {
+    const controller = new AbortController();
+    const clientWithOptions = new MailpitClient("http://localhost:8025", {
+      fetchOptions: { signal: controller.signal, cache: "no-store" },
+    });
+    mockFetch.mockResolvedValue(mockJsonResponse({ Version: "1.0" }));
+    await clientWithOptions.getInfo();
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(init.signal).toBe(controller.signal);
+    expect(init.cache).toBe("no-store");
+  });
+
+  test("should apply both auth and fetchOptions together", async () => {
+    const controller = new AbortController();
+    const clientWithOptions = new MailpitClient("http://localhost:8025", {
+      auth: { username: "u", password: "p" },
+      fetchOptions: { signal: controller.signal, cache: "no-store" },
+    });
+    mockFetch.mockResolvedValue(mockTextResponse("ok"));
+    await clientWithOptions.setReadStatus();
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>)["Authorization"]).toMatch(
+      /^Basic /,
+    );
+    expect(init.signal).toBe(controller.signal);
+    expect(init.cache).toBe("no-store");
+  });
+
+  test("should not allow fetchOptions to override method or headers", async () => {
+    const clientWithOptions = new MailpitClient("http://localhost:8025", {
+      auth: { username: "u", password: "p" },
+    });
+    mockFetch.mockResolvedValue(mockTextResponse("ok"));
+    await clientWithOptions.setReadStatus();
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(init.method).toBe("PUT");
+    expect((init.headers as Record<string, string>)["Authorization"]).toMatch(
+      /^Basic /,
+    );
+  });
+
   // Mock response for message list polling
   const mockEmptyMessages = {
     messages: [],

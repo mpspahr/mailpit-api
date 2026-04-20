@@ -23,6 +23,8 @@ export interface MailpitClientConfig {
   baseURL: string;
   /** Optional basic auth credentials for API and WebSocket connections. */
   auth?: MailpitAuthCredentials;
+  /** Optional fetch options merged into every request (e.g. `signal`, `cache`, `keepalive`, `dispatcher`). `method`, `headers`, and `body` are managed internally and cannot be overridden. */
+  fetchOptions?: Omit<RequestInit, "method" | "headers" | "body">;
 }
 
 /** Represents a name and email address for a request. */
@@ -519,14 +521,15 @@ interface RequestOptions {
  */
 export class MailpitClient {
   readonly #authHeader?: string;
+  readonly #fetchOptions?: Omit<RequestInit, "method" | "headers" | "body">;
   private readonly baseURL: string;
 
   /**
    * Creates an instance of {@link MailpitClient}.
    * @param baseURL - The base URL of the Mailpit API.
-   * @param auth - Optional authentication credentials.
-   * @param auth.username - The username for basic authentication.
-   * @param auth.password - The password for basic authentication.
+   * @param options - Optional configuration including auth credentials and fetch options.
+   * @param options.auth - Optional basic auth credentials.
+   * @param options.fetchOptions - Optional fetch options merged into every request (e.g. `signal`, `cache`, `keepalive`, `dispatcher`). `method`, `headers`, and `body` are managed internally.
    * @example No Auth
    * ```typescript
    * const mailpit = new MailpitClient("http://localhost:8025");
@@ -534,12 +537,21 @@ export class MailpitClient {
    * @example Basic Auth
    * ```typescript
    * const mailpit = new MailpitClient("http://localhost:8025", {
-   *   username: "admin",
-   *   password: "supersecret"
+   *   auth: { username: "admin", password: "supersecret" }
+   * });
+   * ```
+   * @example With custom fetch options
+   * ```typescript
+   * const controller = new AbortController();
+   * const mailpit = new MailpitClient("http://localhost:8025", {
+   *   fetchOptions: { signal: controller.signal }
    * });
    * ```
    */
-  constructor(baseURL: string, auth?: MailpitAuthCredentials) {
+  constructor(
+    baseURL: string,
+    options?: Pick<MailpitClientConfig, "auth" | "fetchOptions">,
+  ) {
     if (!baseURL || !/^https?:\/\//.test(baseURL)) {
       throw new Error(
         "The value of the 'baseURL' parameter must start with http:// or https://",
@@ -547,9 +559,10 @@ export class MailpitClient {
     }
 
     this.baseURL = baseURL;
-    this.#authHeader = auth
-      ? `Basic ${base64Encode(`${auth.username}:${auth.password}`)}`
+    this.#authHeader = options?.auth
+      ? `Basic ${base64Encode(`${options.auth.username}:${options.auth.password}`)}`
       : undefined;
+    this.#fetchOptions = options?.fetchOptions;
   }
 
   /**
@@ -592,6 +605,7 @@ export class MailpitClient {
     let response: Response;
     try {
       response = await globalThis.fetch(urlString, {
+        ...this.#fetchOptions,
         method,
         headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,

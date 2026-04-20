@@ -20,8 +20,7 @@ describe("Mailpit E2E Tests", () => {
 
   // Initialize MailpitClient with environment variables
   const mailpit = new MailpitClient(BASEURL, {
-    username: USERNAME,
-    password: PASSWORD,
+    auth: { username: USERNAME, password: PASSWORD },
   });
 
   const events = new MailpitEvents(BASEURL, {
@@ -629,8 +628,7 @@ describe("Mailpit E2E Tests", () => {
       // Note: This test only works if Mailpit has authentication enabled.
       // If authentication is disabled, this test will pass by default.
       const invalidAuthMailpit = new MailpitClient(BASEURL, {
-        username: "invalid-user",
-        password: "invalid-password",
+        auth: { username: "invalid-user", password: "invalid-password" },
       });
 
       await expect(invalidAuthMailpit.getInfo()).rejects.toThrow(
