@@ -166,7 +166,7 @@ interface ReconnectingWebSocketInternals {
  */
 export class MailpitEvents {
   readonly #authHeader?: string;
-  private readonly wsURL: string;
+  private readonly wsURL: URL;
   private webSocket: ReconnectingWebSocket | null = null;
   private eventListeners: Map<string, Set<(event: MailpitEvent) => void>> =
     new Map();
@@ -195,8 +195,9 @@ export class MailpitEvents {
         "The value of the 'baseURL' parameter must start with http, https, ws, or wss",
       );
     }
-
-    this.wsURL = `${baseURL.replace(/^http/, "ws").replace(/\/?\/$/, "")}/api/events`;
+    this.wsURL = new URL(
+      baseURL.replace(/^http/, "ws").replace(/\/+$/, "") + "/api/events",
+    );
     this.#authHeader = auth
       ? `Basic ${base64Encode(`${auth.username}:${auth.password}`)}`
       : undefined;
@@ -239,9 +240,13 @@ export class MailpitEvents {
         }
       : WS;
 
-    this.webSocket = new ReconnectingWebSocket(this.wsURL, undefined, {
-      WebSocket: wsConstructor,
-    });
+    this.webSocket = new ReconnectingWebSocket(
+      this.wsURL.toString(),
+      undefined,
+      {
+        WebSocket: wsConstructor,
+      },
+    );
 
     this.webSocket.addEventListener("message", (event) => {
       let message: MailpitEvent;
