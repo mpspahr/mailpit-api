@@ -190,9 +190,15 @@ export class MailpitEvents {
    * ```
    */
   constructor(baseURL: string, auth?: MailpitAuthCredentials) {
-    if (!baseURL || !/^(?:http|ws)s?:\/\//.test(baseURL)) {
+    if (!baseURL || !/^(?:http|ws)s?:\/\/.+/.test(baseURL)) {
       throw new Error(
         "The value of the 'baseURL' parameter must start with http, https, ws, or wss",
+      );
+    }
+    const parsedBase = new URL(baseURL.replace(/^ws/, "http"));
+    if (parsedBase.search || parsedBase.hash) {
+      throw new Error(
+        "The value of the 'baseURL' parameter must not contain query parameters or a hash fragment",
       );
     }
     this.wsURL = new URL(

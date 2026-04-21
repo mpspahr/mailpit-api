@@ -552,9 +552,16 @@ export class MailpitClient {
     baseURL: string,
     options?: Pick<MailpitClientConfig, "auth" | "fetchOptions">,
   ) {
-    if (!baseURL || !/^https?:\/\//.test(baseURL)) {
+    if (!baseURL || !/^https?:\/\/.+/.test(baseURL)) {
       throw new Error(
         "The value of the 'baseURL' parameter must start with http:// or https://",
+      );
+    }
+
+    const parsedBase = new URL(baseURL);
+    if (parsedBase.search || parsedBase.hash) {
+      throw new Error(
+        "The value of the 'baseURL' parameter must not contain query parameters or a hash fragment",
       );
     }
 

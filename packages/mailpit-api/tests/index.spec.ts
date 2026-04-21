@@ -150,6 +150,24 @@ describe("MailpitClient", () => {
     );
   });
 
+  test("should throw error for bare protocol string", () => {
+    expect(() => new MailpitClient("http://")).toThrow(
+      "The value of the 'baseURL' parameter must start with http:// or https://",
+    );
+  });
+
+  test("should throw error for baseURL with query parameters", () => {
+    expect(() => new MailpitClient("http://localhost:8025?foo=bar")).toThrow(
+      "The value of the 'baseURL' parameter must not contain query parameters or a hash fragment",
+    );
+  });
+
+  test("should throw error for baseURL with hash fragment", () => {
+    expect(() => new MailpitClient("http://localhost:8025#section")).toThrow(
+      "The value of the 'baseURL' parameter must not contain query parameters or a hash fragment",
+    );
+  });
+
   test("should pass fetchOptions to every request", async () => {
     const controller = new AbortController();
     const clientWithOptions = new MailpitClient("http://localhost:8025", {

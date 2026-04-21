@@ -1,4 +1,12 @@
-import { vi, describe, beforeEach, afterEach, expect, test } from "vitest";
+import {
+  vi,
+  type Mock,
+  describe,
+  beforeEach,
+  afterEach,
+  expect,
+  test,
+} from "vitest";
 import ReconnectingWebSocket from "partysocket/ws";
 import { MailpitEvents } from "../src/index";
 
@@ -69,6 +77,24 @@ describe("MailpitEvents", () => {
     );
   });
 
+  test("should throw error for bare protocol string", () => {
+    expect(() => new MailpitEvents("http://")).toThrow(
+      "The value of the 'baseURL' parameter must start with http, https, ws, or wss",
+    );
+  });
+
+  test("should throw error for baseURL with query parameters", () => {
+    expect(() => new MailpitEvents("http://localhost:8025?foo=bar")).toThrow(
+      "The value of the 'baseURL' parameter must not contain query parameters or a hash fragment",
+    );
+  });
+
+  test("should throw error for baseURL with hash fragment", () => {
+    expect(() => new MailpitEvents("http://localhost:8025#section")).toThrow(
+      "The value of the 'baseURL' parameter must not contain query parameters or a hash fragment",
+    );
+  });
+
   test("should not auto-connect WebSocket by default", () => {
     const newEvents = new MailpitEvents("http://localhost:8025");
     expect(
@@ -84,6 +110,19 @@ describe("MailpitEvents", () => {
     internalEvents.webSocket = existingWebSocket;
     internalEvents.connect();
     expect(internalEvents.webSocket).toBe(existingWebSocket);
+  });
+
+  test("waitForEvent() should reject if connect() throws", async () => {
+    const connectionError = new Error("WebSocket connection refused");
+    (ReconnectingWebSocket as unknown as Mock).mockImplementationOnce(
+      function () {
+        throw connectionError;
+      },
+    );
+    const newEvents = new MailpitEvents("http://localhost:8025");
+    await expect(newEvents.waitForEvent("new")).rejects.toThrow(
+      "WebSocket connection refused",
+    );
   });
 
   test("disconnect() should do nothing when no WebSocket exists", () => {
