@@ -23,8 +23,8 @@ export interface MailpitClientConfig {
   baseURL: string;
   /** Optional basic auth credentials for API and WebSocket connections. */
   auth?: MailpitAuthCredentials;
-  /** Optional fetch options merged into every request (e.g. `signal`, `cache`, `keepalive`, `dispatcher`). `method`, `headers`, and `body` are managed internally and cannot be overridden. */
-  fetchOptions?: Omit<RequestInit, "method" | "headers" | "body">;
+  /** Optional fetch options merged into every request (e.g. `signal`, `cache`, `keepalive`, `dispatcher`, `headers`). `method` and `body` are managed internally and cannot be overridden. Any `headers` provided here will be merged with internally managed headers (`Authorization`, `Content-Type`), with internal headers taking precedence. */
+  fetchOptions?: Omit<RequestInit, "method" | "body">;
 }
 
 /** Represents a name and email address for a request. */
@@ -521,7 +521,7 @@ interface RequestOptions {
  */
 export class MailpitClient {
   readonly #authHeader?: string;
-  readonly #fetchOptions?: Omit<RequestInit, "method" | "headers" | "body">;
+  readonly #fetchOptions?: Omit<RequestInit, "method" | "body">;
   private readonly baseURL: string;
 
   /**
@@ -529,7 +529,7 @@ export class MailpitClient {
    * @param baseURL - The base URL of the Mailpit API.
    * @param options - Optional configuration including auth credentials and fetch options.
    * @param options.auth - Optional basic auth credentials.
-   * @param options.fetchOptions - Optional fetch options merged into every request (e.g. `signal`, `cache`, `keepalive`, `dispatcher`). `method`, `headers`, and `body` are managed internally.
+   * @param options.fetchOptions - Optional fetch options merged into every request (e.g. `signal`, `cache`, `keepalive`, `dispatcher`, `headers`). `method` and `body` are managed internally. Any `headers` are merged with internal headers, with internal headers taking precedence.
    * @example No Auth
    * ```typescript
    * const mailpit = new MailpitClient("http://localhost:8025");
@@ -614,7 +614,12 @@ export class MailpitClient {
       response = await globalThis.fetch(urlString, {
         ...this.#fetchOptions,
         method,
-        headers,
+        headers: {
+          ...(this.#fetchOptions?.headers as
+            | Record<string, string>
+            | undefined),
+          ...headers,
+        },
         body: body !== undefined ? JSON.stringify(body) : undefined,
       });
     } catch (error: unknown) {
