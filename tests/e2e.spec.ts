@@ -24,8 +24,7 @@ describe("Mailpit E2E Tests", () => {
   });
 
   const events = new MailpitEvents(BASEURL, {
-    username: USERNAME,
-    password: PASSWORD,
+    auth: { username: USERNAME, password: PASSWORD },
   });
 
   // Attachment file setup

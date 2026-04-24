@@ -1,4 +1,6 @@
-import ReconnectingWebSocket from "partysocket/ws";
+import ReconnectingWebSocket, {
+  type Options as ReconnectOptions,
+} from "partysocket/ws";
 import WS from "isomorphic-ws";
 import type {
   MailpitAuthCredentials,
@@ -137,6 +139,26 @@ export interface MailpitEventMap {
 export type MailpitEventType = keyof MailpitEventMap;
 
 /**
+ * Configuration options for a {@link MailpitEvents} instance.
+ */
+export interface MailpitEventsOptions {
+  /** Optional basic auth credentials. */
+  auth?: MailpitAuthCredentials;
+  /**
+   * Optional options passed to the underlying `ws` WebSocket constructor.
+   * **Node.js only** — silently ignored in browsers (native WebSocket has no options object).
+   * Use this for TLS settings (`rejectUnauthorized`, `ca`, `cert`), proxy agents, custom headers, etc.
+   */
+  wsOptions?: WS.ClientOptions;
+  /**
+   * Optional reconnection tuning for the underlying ReconnectingWebSocket.
+   * Controls retry behaviour, delays, backoff factor, and connection timeout.
+   * The `WebSocket` constructor field is managed internally and cannot be overridden here.
+   */
+  reconnectOptions?: Omit<ReconnectOptions, "WebSocket">;
+}
+
+/**
  * @internal
  * Internal properties exposed by partysocket's ReconnectingWebSocket and the
  * underlying `ws` WebSocket. Used to prevent the Node.js process from hanging
@@ -166,6 +188,8 @@ interface ReconnectingWebSocketInternals {
  */
 export class MailpitEvents {
   readonly #authHeader?: string;
+  readonly #userWsOptions?: WS.ClientOptions;
+  readonly #reconnectOptions?: Omit<ReconnectOptions, "WebSocket">;
   private readonly wsURL: URL;
   private webSocket: ReconnectingWebSocket | null = null;
   private eventListeners: Map<string, Set<(event: MailpitEvent) => void>> =
@@ -174,9 +198,10 @@ export class MailpitEvents {
   /**
    * Creates an instance of {@link MailpitEvents}.
    * @param baseURL - The base URL of the Mailpit instance (e.g. `http://localhost:8025`).
-   * @param auth - Optional authentication credentials.
-   * @param auth.username - The username for basic authentication.
-   * @param auth.password - The password for basic authentication.
+   * @param options - Optional configuration.
+   * @param options.auth - Optional basic auth credentials.
+   * @param options.wsOptions - Optional `ws` constructor options (Node.js only). Useful for TLS settings, proxy agents, etc.
+   * @param options.reconnectOptions - Optional reconnection tuning (retry count, delays, backoff).
    * @example No Auth
    * ```typescript
    * const events = new MailpitEvents("http://localhost:8025");
@@ -184,12 +209,18 @@ export class MailpitEvents {
    * @example Basic Auth
    * ```typescript
    * const events = new MailpitEvents("http://localhost:8025", {
-   *   username: "admin",
-   *   password: "supersecret"
+   *   auth: { username: "admin", password: "supersecret" }
+   * });
+   * ```
+   * @example Self-signed TLS certificate (Node.js only)
+   * ```typescript
+   * const events = new MailpitEvents("https://localhost:8025", {
+   *   auth: { username: "admin", password: "supersecret" },
+   *   wsOptions: { rejectUnauthorized: false },
    * });
    * ```
    */
-  constructor(baseURL: string, auth?: MailpitAuthCredentials) {
+  constructor(baseURL: string, options?: MailpitEventsOptions) {
     if (!baseURL || !/^(?:http|ws)s?:\/\/.+/.test(baseURL)) {
       throw new Error(
         "The value of the 'baseURL' parameter must start with http, https, ws, or wss",
@@ -204,9 +235,11 @@ export class MailpitEvents {
     this.wsURL = new URL(
       baseURL.replace(/^http/, "ws").replace(/\/+$/, "") + "/api/events",
     );
-    this.#authHeader = auth
-      ? `Basic ${base64Encode(`${auth.username}:${auth.password}`)}`
+    this.#authHeader = options?.auth
+      ? `Basic ${base64Encode(`${options.auth.username}:${options.auth.password}`)}`
       : undefined;
+    this.#userWsOptions = options?.wsOptions;
+    this.#reconnectOptions = options?.reconnectOptions;
   }
 
   /**
@@ -225,31 +258,40 @@ export class MailpitEvents {
       return;
     }
 
-    // Only set in Node.js when auth credentials are provided.
-    // Browsers cannot set custom WebSocket headers, so we skip the wrapper
-    // entirely to avoid passing an options object where the native WebSocket
-    // constructor expects only an optional protocols string/array.
-    const wsOptions: WS.ClientOptions | undefined =
-      !IS_NATIVE_WEBSOCKET && this.#authHeader
-        ? {
-            headers: {
-              Authorization: this.#authHeader,
-            },
-          }
-        : undefined;
+    // Capture private fields for use inside the nested class constructor below.
+    const authHeader = this.#authHeader;
+    const userWsOptions = this.#userWsOptions;
 
-    const wsConstructor = wsOptions
-      ? class AuthenticatedWebSocket extends WS {
-          constructor(address: string, options?: WS.ClientOptions) {
-            super(address, { ...wsOptions, ...options });
+    // In Node.js, build a custom WebSocket constructor that injects auth headers
+    // and merges any user-provided wsOptions. Browsers cannot set custom headers
+    // on WebSocket connections, so we skip this entirely when using native WebSocket.
+    const wsConstructor =
+      !IS_NATIVE_WEBSOCKET && (authHeader || userWsOptions)
+        ? class AuthenticatedWebSocket extends WS {
+            constructor(address: string, options?: WS.ClientOptions) {
+              super(address, {
+                ...userWsOptions,
+                ...options,
+                headers: {
+                  // User-provided headers from wsOptions and per-call options first,
+                  // then auth header last so it cannot be overridden.
+                  ...(userWsOptions?.headers as Record<string, string>),
+                  ...(options?.headers as Record<string, string>),
+                  ...(authHeader ? { Authorization: authHeader } : {}),
+                },
+              });
+            }
           }
-        }
-      : WS;
+        : WS;
 
     this.webSocket = new ReconnectingWebSocket(
       this.wsURL.toString(),
       undefined,
       {
+        ...this.#reconnectOptions,
+        // WebSocket constructor is always set last so users cannot override it
+        // via reconnectOptions (Omit<Options, "WebSocket"> at the type level,
+        // enforced here at runtime too).
         WebSocket: wsConstructor,
       },
     );

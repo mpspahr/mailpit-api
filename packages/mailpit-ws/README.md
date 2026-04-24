@@ -77,8 +77,7 @@ events.disconnect();
 import { MailpitEvents } from "mailpit-ws";
 
 const events = new MailpitEvents("http://localhost:8025", {
-  username: "user",
-  password: "pass",
+  auth: { username: "user", password: "pass" },
 });
 ```
 

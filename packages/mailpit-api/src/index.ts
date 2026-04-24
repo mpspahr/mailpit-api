@@ -15,15 +15,25 @@ export interface MailpitAuthCredentials {
 }
 
 /**
- * Configuration for a {@link MailpitClient} instance.
- * @experimental Exported for future use by related packages (e.g., a standalone WebSocket module).
+ * Options for a {@link MailpitClient} instance.
  */
-export interface MailpitClientConfig {
-  /** The base URL of the Mailpit API (must start with http:// or https://). */
-  baseURL: string;
-  /** Optional basic auth credentials for API and WebSocket connections. */
+export interface MailpitClientOptions {
+  /** Optional basic auth credentials. */
   auth?: MailpitAuthCredentials;
-  /** Optional fetch options merged into every request (e.g. `signal`, `cache`, `keepalive`, `dispatcher`, `headers`). `method` and `body` are managed internally and cannot be overridden. Any `headers` provided here will be merged with internally managed headers (`Authorization`, `Content-Type`), with internal headers taking precedence. */
+  /**
+   * Optional fetch options merged into every request.
+   * `method` and `body` are managed internally and cannot be overridden.
+   * Any `headers` provided here are merged with internally managed headers (`Authorization`, `Content-Type`), with internal headers taking precedence.
+   * @example Setting cookies
+   * ```typescript
+   * { fetchOptions: { headers: { Cookie: "session=abc123" } } }
+   * ```
+   * @example Disabling TLS verification in Node.js (undici `Agent`)
+   * ```typescript
+   * import { Agent } from "undici";
+   * { fetchOptions: { dispatcher: new Agent({ connect: { rejectUnauthorized: false } }) } }
+   * ```
+   */
   fetchOptions?: Omit<RequestInit, "method" | "body">;
 }
 
@@ -540,18 +550,18 @@ export class MailpitClient {
    *   auth: { username: "admin", password: "supersecret" }
    * });
    * ```
-   * @example With custom fetch options
+   * @example Custom cookies and disabled TLS verification (Node.js only)
    * ```typescript
-   * const controller = new AbortController();
-   * const mailpit = new MailpitClient("http://localhost:8025", {
-   *   fetchOptions: { signal: controller.signal }
+   * import { Agent } from "undici";
+   * const mailpit = new MailpitClient("https://localhost:8025", {
+   *   fetchOptions: {
+   *     headers: { Cookie: "session=abc123" },
+   *     dispatcher: new Agent({ connect: { rejectUnauthorized: false } }),
+   *   }
    * });
    * ```
    */
-  constructor(
-    baseURL: string,
-    options?: Pick<MailpitClientConfig, "auth" | "fetchOptions">,
-  ) {
+  constructor(baseURL: string, options?: MailpitClientOptions) {
     if (!baseURL || !/^https?:\/\/.+/.test(baseURL)) {
       throw new Error(
         "The value of the 'baseURL' parameter must start with http:// or https://",
