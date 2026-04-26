@@ -105,8 +105,4 @@ test("should receive welcome email after registration", async ({
 
 ### Using in the Browser
 
-`mailpit-api` is fully compatible with browser environments. Start Mailpit with the `--api-cors` flag to allow requests from your app's origin:
-
-```bash
-mailpit --api-cors="http://localhost:5173"
-```
+`mailpit-api` is also fully compatible with browser environments. See the [Mailpit CORS configuration documentation](https://mailpit.axllent.org/docs/configuration/http/#cors-configuration) to allow requests from your app's origin.

@@ -145,9 +145,8 @@ export interface MailpitEventsOptions {
   /** Optional basic auth credentials. */
   auth?: MailpitAuthCredentials;
   /**
-   * Optional options passed to the underlying `ws` WebSocket constructor.
-   * **Node.js only** — silently ignored in browsers (native WebSocket has no options object).
-   * Use this for TLS settings (`rejectUnauthorized`, `ca`, `cert`), proxy agents, custom headers, etc.
+   * **Node.js only** Optional options passed to the underlying `ws` WebSocket constructor.
+   * Silently ignored in browsers (native WebSocket has no options object).
    */
   wsOptions?: WS.ClientOptions;
   /**
@@ -221,19 +220,26 @@ export class MailpitEvents {
    * ```
    */
   constructor(baseURL: string, options?: MailpitEventsOptions) {
-    if (!baseURL || !/^(?:http|ws)s?:\/\/.+/.test(baseURL)) {
+    let parsedBase: URL;
+    try {
+      parsedBase = new URL(baseURL.replace(/^http/, "ws"));
+    } catch {
+      throw new Error(
+        "The value of the 'baseURL' parameter is not a valid URL",
+      );
+    }
+    if (!["ws:", "wss:"].includes(parsedBase.protocol)) {
       throw new Error(
         "The value of the 'baseURL' parameter must start with http, https, ws, or wss",
       );
     }
-    const parsedBase = new URL(baseURL.replace(/^ws/, "http"));
     if (parsedBase.search || parsedBase.hash) {
       throw new Error(
         "The value of the 'baseURL' parameter must not contain query parameters or a hash fragment",
       );
     }
     this.wsURL = new URL(
-      baseURL.replace(/^http/, "ws").replace(/\/+$/, "") + "/api/events",
+      parsedBase.toString().replace(/\/+$/, "") + "/api/events",
     );
     this.#authHeader = options?.auth
       ? `Basic ${base64Encode(`${options.auth.username}:${options.auth.password}`)}`

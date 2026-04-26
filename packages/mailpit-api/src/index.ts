@@ -562,13 +562,20 @@ export class MailpitClient {
    * ```
    */
   constructor(baseURL: string, options?: MailpitClientOptions) {
-    if (!baseURL || !/^https?:\/\/.+/.test(baseURL)) {
+    let parsedBase: URL;
+    try {
+      parsedBase = new URL(baseURL);
+    } catch {
+      throw new Error(
+        "The value of the 'baseURL' parameter is not a valid URL",
+      );
+    }
+    if (!["http:", "https:"].includes(parsedBase.protocol)) {
       throw new Error(
         "The value of the 'baseURL' parameter must start with http:// or https://",
       );
     }
 
-    const parsedBase = new URL(baseURL);
     if (parsedBase.search || parsedBase.hash) {
       throw new Error(
         "The value of the 'baseURL' parameter must not contain query parameters or a hash fragment",
@@ -619,18 +626,18 @@ export class MailpitClient {
 
     const urlString = url.toString();
 
+    const mergedHeaders = new Headers(this.#fetchOptions?.headers);
+    for (const [key, value] of Object.entries(headers)) {
+      mergedHeaders.set(key, value);
+    }
+
     let response: Response;
     try {
       response = await globalThis.fetch(urlString, {
         ...this.#fetchOptions,
         method,
-        headers: {
-          ...(this.#fetchOptions?.headers as
-            | Record<string, string>
-            | undefined),
-          ...headers,
-        },
-        body: body !== undefined ? JSON.stringify(body) : undefined,
+        headers: mergedHeaders,
+        body: JSON.stringify(body),
       });
     } catch (error: unknown) {
       // Per the Fetch spec, fetch() only throws TypeError (network or setup failures).

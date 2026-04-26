@@ -1,13 +1,12 @@
-# This workflow is triggered when a version tag is pushed.
+# This workflow is triggered when a GitHub release is published.
 # It runs tests and, if successful, builds and publishes the tagged package to NPM.
 # Tags must follow the format: mailpit-api@x.y.z or mailpit-ws@x.y.z
+# Pre-releases are published to npm with the "next" dist-tag instead of "latest".
 name: Publish Release to NPM
 
 on:
-  push:
-    tags:
-      - "mailpit-api@*"
-      - "mailpit-ws@*"
+  release:
+    types: [published]
 
 concurrency:
   group: "npm-publish-${{ github.ref }}"
@@ -25,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write
+      contents: read
       id-token: write
     steps:
       - uses: actions/checkout@v6
@@ -40,7 +39,7 @@ jobs:
       - name: Determine package to publish
         id: pkg
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          TAG="${{ github.event.release.tag_name }}"
           PACKAGE_NAME="${TAG%@*}"
           VERSION="${TAG##*@}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
@@ -48,11 +47,12 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Publishing $PACKAGE_NAME@$VERSION"
       - name: Publish to npm
-        run: npm publish --workspace packages/${{ steps.pkg.outputs.name }} --provenance --access public
-      - name: Create GitHub Release
-        run: gh release create "${{ steps.pkg.outputs.tag }}" --generate-notes --title "${{ steps.pkg.outputs.tag }}"
-        env:
-          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event.release.prerelease }}" = "true" ]; then
+            npm publish --workspace packages/${{ steps.pkg.outputs.name }} --provenance --access public --tag next
+          else
+            npm publish --workspace packages/${{ steps.pkg.outputs.name }} --provenance --access public
+          fi
 
   call-docs:
     needs: publish

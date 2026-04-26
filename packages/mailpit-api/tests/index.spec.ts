@@ -146,12 +146,18 @@ describe("MailpitClient", () => {
   // Constructor validation tests
   test("should throw error for malformed protocol", () => {
     expect(() => new MailpitClient("ht!tp://bad-url")).toThrow(
-      "The value of the 'baseURL' parameter must start with http:// or https://",
+      "The value of the 'baseURL' parameter is not a valid URL",
     );
   });
 
   test("should throw error for bare protocol string", () => {
     expect(() => new MailpitClient("http://")).toThrow(
+      "The value of the 'baseURL' parameter is not a valid URL",
+    );
+  });
+
+  test("should throw error for wrong scheme", () => {
+    expect(() => new MailpitClient("ftp://localhost:8025")).toThrow(
       "The value of the 'baseURL' parameter must start with http:// or https://",
     );
   });
@@ -189,9 +195,7 @@ describe("MailpitClient", () => {
     mockFetch.mockResolvedValue(mockTextResponse("ok"));
     await clientWithOptions.setReadStatus();
     const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect((init.headers as Record<string, string>)["Authorization"]).toMatch(
-      /^Basic /,
-    );
+    expect((init.headers as Headers).get("Authorization")).toMatch(/^Basic /);
     expect(init.signal).toBe(controller.signal);
     expect(init.cache).toBe("no-store");
   });
@@ -199,14 +203,16 @@ describe("MailpitClient", () => {
   test("should not allow fetchOptions to override method or headers", async () => {
     const clientWithOptions = new MailpitClient("http://localhost:8025", {
       auth: { username: "u", password: "p" },
+      fetchOptions: {
+        method: "GET",
+        headers: { Authorization: "Bearer fake-token" },
+      } as RequestInit,
     });
     mockFetch.mockResolvedValue(mockTextResponse("ok"));
     await clientWithOptions.setReadStatus();
     const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(init.method).toBe("PUT");
-    expect((init.headers as Record<string, string>)["Authorization"]).toMatch(
-      /^Basic /,
-    );
+    expect((init.headers as Headers).get("Authorization")).toMatch(/^Basic /);
   });
 
   // Mock response for message list polling

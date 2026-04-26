@@ -73,12 +73,18 @@ describe("MailpitEvents", () => {
   // Constructor validation tests
   test("should throw error for malformed protocol", () => {
     expect(() => new MailpitEvents("ht!tp://bad-url")).toThrow(
-      "The value of the 'baseURL' parameter must start with http, https, ws, or wss",
+      "The value of the 'baseURL' parameter is not a valid URL",
     );
   });
 
   test("should throw error for bare protocol string", () => {
     expect(() => new MailpitEvents("http://")).toThrow(
+      "The value of the 'baseURL' parameter is not a valid URL",
+    );
+  });
+
+  test("should throw error for wrong scheme", () => {
+    expect(() => new MailpitEvents("ftp://localhost:8025")).toThrow(
       "The value of the 'baseURL' parameter must start with http, https, ws, or wss",
     );
   });
