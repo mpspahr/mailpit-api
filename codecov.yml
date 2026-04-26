@@ -1,0 +1,17 @@
+coverage:
+  status:
+    project:
+      mailpit-api:
+        flags: [mailpit-api]
+      mailpit-ws:
+        flags: [mailpit-ws]
+
+flags:
+  mailpit-api:
+    paths:
+      - packages/mailpit-api/src/
+    carryforward: true
+  mailpit-ws:
+    paths:
+      - packages/mailpit-ws/src/
+    carryforward: true

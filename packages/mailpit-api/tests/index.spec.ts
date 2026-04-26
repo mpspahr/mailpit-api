@@ -7,33 +7,7 @@ import {
   test,
   type Mock,
 } from "vitest";
-import ReconnectingWebSocket from "partysocket/ws";
 import { MailpitClient } from "../src/index";
-
-// vi.hoisted ensures this Map is available inside the vi.mock() factory below,
-// which vitest hoists before all imports.
-const mockWebSocketHandlers = vi.hoisted(
-  () => new Map<string, ((...args: never[]) => void)[]>(),
-);
-
-vi.mock("partysocket/ws", () => {
-  // Must use a regular function (not arrow) so the mock can be used as a constructor
-  // with `new ReconnectingWebSocket(...)`.
-  const mock = vi.fn(function (this: Record<string, unknown>) {
-    this.readyState = 1;
-    this.addEventListener = vi.fn(
-      (event: string, handler: (...args: never[]) => void) => {
-        const handlers = mockWebSocketHandlers.get(event) ?? [];
-        handlers.push(handler);
-        mockWebSocketHandlers.set(event, handlers);
-      },
-    );
-    this.removeEventListener = vi.fn();
-    this.close = vi.fn();
-  });
-  Object.assign(mock, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 });
-  return { default: mock };
-});
 
 /** Build a minimal fetch-compatible Response mock */
 function mockJsonResponse(data: unknown, status = 200): Response {
@@ -66,42 +40,16 @@ function mockTextResponse(text: string, status = 200): Response {
 describe("MailpitClient", () => {
   let client: MailpitClient;
   let mockFetch: Mock;
-  let internalClient: {
-    connectWebSocket: () => void;
-    disconnect: () => void;
-    webSocket: ReconnectingWebSocket | null;
-    onEvent: (
-      eventType: string,
-      listener: (event: unknown) => void,
-    ) => () => void;
-    waitForEvent: (
-      eventType: string,
-      timeout?: number,
-    ) => Promise<{ Type: string; Data: unknown }>;
-    waitForMessage: InstanceType<typeof MailpitClient>["waitForMessage"];
-    waitForMessages: InstanceType<typeof MailpitClient>["waitForMessages"];
-    eventListeners: Map<
-      string,
-      Set<(event: { Type: string; Data: unknown }) => void>
-    >;
-    handleWebSocketMessage: (message: { Type: string; Data: unknown }) => void;
-    removeListener: (
-      eventType: string,
-      listener: (event: unknown) => void,
-    ) => void;
-  };
 
   beforeEach(() => {
     mockFetch = vi.fn();
     vi.stubGlobal("fetch", mockFetch);
     client = new MailpitClient("http://localhost:8025");
-    internalClient = client as unknown as typeof internalClient;
   });
 
   afterEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
-    mockWebSocketHandlers.clear();
   });
 
   test("should call setReadStatus() with no parameters and return ok", async () => {
@@ -114,7 +62,6 @@ describe("MailpitClient", () => {
     expect(result).toBe("ok");
   });
 
-  // Methods that could be skipped in e2e if feature not enabled
   test("should call releaseMessage() and return ok", async () => {
     mockFetch.mockResolvedValue(mockTextResponse("ok"));
     const result = await client.releaseMessage("id", { To: ["a@b.com"] });
@@ -199,156 +146,73 @@ describe("MailpitClient", () => {
   // Constructor validation tests
   test("should throw error for malformed protocol", () => {
     expect(() => new MailpitClient("ht!tp://bad-url")).toThrow(
+      "The value of the 'baseURL' parameter is not a valid URL",
+    );
+  });
+
+  test("should throw error for bare protocol string", () => {
+    expect(() => new MailpitClient("http://")).toThrow(
+      "The value of the 'baseURL' parameter is not a valid URL",
+    );
+  });
+
+  test("should throw error for wrong scheme", () => {
+    expect(() => new MailpitClient("ftp://localhost:8025")).toThrow(
       "The value of the 'baseURL' parameter must start with http:// or https://",
     );
   });
 
-  // WebSocket configuration tests (connection behavior is tested in E2E)
-  test("should not auto-connect WebSocket by default", () => {
-    const newClient = new MailpitClient("http://localhost:8025");
-    expect(newClient["webSocket"]).toBeNull();
-  });
-
-  test("connectWebSocket() should return early when already connected", () => {
-    const existingWebSocket = {
-      readyState: ReconnectingWebSocket.OPEN,
-    } as unknown as ReconnectingWebSocket;
-
-    internalClient.webSocket = existingWebSocket;
-    internalClient.connectWebSocket();
-    expect(internalClient.webSocket).toBe(existingWebSocket);
-  });
-
-  test("disconnect() should do nothing when no WebSocket exists", () => {
-    internalClient.webSocket = null;
-    internalClient.disconnect();
-    expect(internalClient.webSocket).toBeNull();
-  });
-
-  test("onEvent() should return unsubscribe function that removes listener", () => {
-    const listener1 = vi.fn();
-    const listener2 = vi.fn();
-
-    const unsubscribe1 = internalClient.onEvent("new", listener1);
-    const unsubscribe2 = internalClient.onEvent("new", listener2);
-
-    expect(internalClient.eventListeners.get("new")?.size).toBe(2);
-
-    unsubscribe1();
-    expect(internalClient.eventListeners.get("new")?.size).toBe(1);
-
-    unsubscribe2();
-    expect(internalClient.eventListeners.has("new")).toBe(false);
-  });
-
-  test("disconnect() should terminate the inner socket for clean process exit", () => {
-    const mockTerminate = vi.fn();
-
-    internalClient.connectWebSocket();
-    expect(internalClient.webSocket).not.toBeNull();
-
-    const ws = internalClient.webSocket as unknown as Record<string, unknown>;
-    ws._ws = { terminate: mockTerminate };
-
-    internalClient.disconnect();
-
-    expect(internalClient.webSocket).toBeNull();
-    expect(mockTerminate).toHaveBeenCalled();
-  });
-
-  test("connectWebSocket() should unref the underlying socket and timers on open", () => {
-    const mockUnref = vi.fn();
-
-    internalClient.connectWebSocket();
-
-    const openHandlers = mockWebSocketHandlers.get("open") ?? [];
-    expect(openHandlers.length).toBeGreaterThan(0);
-
-    const ws = internalClient.webSocket as unknown as Record<string, unknown>;
-    ws._ws = { _socket: { unref: mockUnref } };
-    ws._uptimeTimeout = { unref: mockUnref };
-    ws._connectTimeout = { unref: mockUnref };
-
-    openHandlers[0]({} as never);
-
-    expect(mockUnref).toHaveBeenCalledTimes(3);
-  });
-
-  test("waitForEvent() should auto-connect when WebSocket is closed", () => {
-    const closedWebSocket = {
-      readyState: ReconnectingWebSocket.CLOSED,
-    } as unknown as ReconnectingWebSocket;
-
-    internalClient.webSocket = closedWebSocket;
-
-    const promise = internalClient.waitForEvent("new", 100);
-
-    expect(internalClient.webSocket).not.toBe(closedWebSocket);
-    expect(internalClient.webSocket).not.toBeNull();
-
-    promise.catch(() => {});
-  });
-
-  test("waitForEvent() should timeout and remove listener", async () => {
-    const promise = internalClient.waitForEvent("new", 50);
-
-    await expect(promise).rejects.toThrow(
-      'Timeout waiting for event of type "new"',
+  test("should throw error for baseURL with query parameters", () => {
+    expect(() => new MailpitClient("http://localhost:8025?foo=bar")).toThrow(
+      "The value of the 'baseURL' parameter must not contain query parameters or a hash fragment",
     );
-
-    const listeners = internalClient.eventListeners.get("new");
-    expect(listeners?.size || 0).toBe(0);
   });
 
-  test("waitForEvent() should not timeout when passed Infinity", async () => {
-    const originalMethod = internalClient.waitForEvent.bind(internalClient);
-    const spy = vi.fn((eventType: string, timeout: number = 50) => {
-      return originalMethod(eventType, timeout);
+  test("should throw error for baseURL with hash fragment", () => {
+    expect(() => new MailpitClient("http://localhost:8025#section")).toThrow(
+      "The value of the 'baseURL' parameter must not contain query parameters or a hash fragment",
+    );
+  });
+
+  test("should pass fetchOptions to every request", async () => {
+    const controller = new AbortController();
+    const clientWithOptions = new MailpitClient("http://localhost:8025", {
+      fetchOptions: { signal: controller.signal, cache: "no-store" },
     });
-    internalClient.waitForEvent = spy;
-
-    const promise = internalClient.waitForEvent("new", Infinity);
-
-    expect(spy).toHaveBeenCalledWith("new", Infinity);
-
-    const listeners = internalClient.eventListeners.get("new");
-    expect(listeners?.size).toBe(1);
-
-    // Message arrives at 100ms - longer than the spy's 50ms default,
-    // proving Infinity disabled the timeout
-    setTimeout(() => {
-      internalClient.handleWebSocketMessage({
-        Type: "new",
-        Data: { ID: "test-123" },
-      });
-    }, 100);
-
-    const result = await promise;
-
-    expect(result.Type).toBe("new");
-    expect(result.Data).toEqual({ ID: "test-123" });
-    expect(internalClient.eventListeners.get("new")?.size || 0).toBe(0);
+    mockFetch.mockResolvedValue(mockJsonResponse({ Version: "1.0" }));
+    await clientWithOptions.getInfo();
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(init.signal).toBe(controller.signal);
+    expect(init.cache).toBe("no-store");
   });
 
-  test("removeListener() should handle removeListener when no listeners exist", () => {
-    const removeListener = internalClient.removeListener.bind(internalClient);
-    expect(() => {
-      removeListener("new", () => {});
-    }).not.toThrow();
+  test("should apply both auth and fetchOptions together", async () => {
+    const controller = new AbortController();
+    const clientWithOptions = new MailpitClient("http://localhost:8025", {
+      auth: { username: "u", password: "p" },
+      fetchOptions: { signal: controller.signal, cache: "no-store" },
+    });
+    mockFetch.mockResolvedValue(mockTextResponse("ok"));
+    await clientWithOptions.setReadStatus();
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Headers).get("Authorization")).toMatch(/^Basic /);
+    expect(init.signal).toBe(controller.signal);
+    expect(init.cache).toBe("no-store");
   });
 
-  test("should silently ignore malformed JSON messages from WebSocket", () => {
-    const mockListener = vi.fn();
-    client.onEvent("new", mockListener);
-
-    const messageHandlers = mockWebSocketHandlers.get("message") ?? [];
-    expect(messageHandlers.length).toBeGreaterThan(0);
-
-    expect(() => {
-      messageHandlers[0]({ data: "{ this is not valid json }" } as never);
-    }).not.toThrow();
-
-    expect(mockListener).not.toHaveBeenCalled();
+  test("should not allow fetchOptions to override method or headers", async () => {
+    const clientWithOptions = new MailpitClient("http://localhost:8025", {
+      auth: { username: "u", password: "p" },
+      fetchOptions: {
+        method: "GET",
+        headers: { Authorization: "Bearer fake-token" },
+      } as RequestInit,
+    });
+    mockFetch.mockResolvedValue(mockTextResponse("ok"));
+    await clientWithOptions.setReadStatus();
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(init.method).toBe("PUT");
+    expect((init.headers as Headers).get("Authorization")).toMatch(/^Basic /);
   });
 
   // Mock response for message list polling
@@ -392,7 +256,7 @@ describe("MailpitClient", () => {
       .mockResolvedValueOnce(mockJsonResponse(mockMessagesWithCount(1)))
       .mockResolvedValueOnce(mockJsonResponse(mockFullMessage));
 
-    const result = await internalClient.waitForMessage({
+    const result = await client.waitForMessage({
       query: "subject:Test",
     });
 
@@ -408,7 +272,7 @@ describe("MailpitClient", () => {
     mockFetch.mockResolvedValue(mockJsonResponse(mockEmptyMessages));
 
     await expect(
-      internalClient.waitForMessage(
+      client.waitForMessage(
         { query: "subject:NonExistent" },
         { timeout: 150, interval: 50 },
       ),
@@ -420,7 +284,7 @@ describe("MailpitClient", () => {
   test("waitForMessages() should use listMessages() by default and resolve when condition met", async () => {
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockMessagesWithCount(1)));
 
-    const result = await internalClient.waitForMessages();
+    const result = await client.waitForMessages();
 
     expect(result.messages_count).toBe(1);
     const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
@@ -432,7 +296,7 @@ describe("MailpitClient", () => {
   test("waitForMessages() should use searchMessages() when search provided", async () => {
     mockFetch.mockResolvedValueOnce(mockJsonResponse(mockMessagesWithCount(1)));
 
-    await internalClient.waitForMessages(
+    await client.waitForMessages(
       { query: "from:test@example.test" },
       { timeout: 1000, interval: 50 },
     );
@@ -448,7 +312,7 @@ describe("MailpitClient", () => {
       .mockResolvedValueOnce(mockJsonResponse(mockMessagesWithCount(3)))
       .mockResolvedValueOnce(mockJsonResponse(mockMessagesWithCount(2)));
 
-    const exactResult = await internalClient.waitForMessages(
+    const exactResult = await client.waitForMessages(
       { count: 2, exact: true },
       { timeout: 1000, interval: 50 },
     );
@@ -462,7 +326,7 @@ describe("MailpitClient", () => {
       .mockResolvedValueOnce(mockJsonResponse(mockMessagesWithCount(1)))
       .mockResolvedValueOnce(mockJsonResponse(mockEmptyMessages));
 
-    const zeroResult = await internalClient.waitForMessages(
+    const zeroResult = await client.waitForMessages(
       { count: 0 },
       { timeout: 1000, interval: 50 },
     );
@@ -476,7 +340,7 @@ describe("MailpitClient", () => {
       .mockResolvedValueOnce(mockJsonResponse(mockEmptyMessages))
       .mockResolvedValueOnce(mockJsonResponse(mockMessagesWithCount(1)));
 
-    const result = await internalClient.waitForMessages({
+    const result = await client.waitForMessages({
       timeout: Infinity,
       interval: 50,
     });
@@ -489,15 +353,12 @@ describe("MailpitClient", () => {
 
     // Without query - generic timeout message
     await expect(
-      internalClient.waitForMessages(
-        { count: 5 },
-        { timeout: 150, interval: 50 },
-      ),
+      client.waitForMessages({ count: 5 }, { timeout: 150, interval: 50 }),
     ).rejects.toThrow("Timeout waiting for messages");
 
     // With query - error message includes the query string
     await expect(
-      internalClient.waitForMessages(
+      client.waitForMessages(
         { query: "from:nobody@example.test", count: 5 },
         { timeout: 150, interval: 50 },
       ),

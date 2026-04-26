@@ -1,8 +1,9 @@
 import eslint from "@eslint/js";
 import vitest from "@vitest/eslint-plugin";
+import { defineConfig } from "eslint/config";
 import tseslint from "typescript-eslint";
 
-export default tseslint.config(
+export default defineConfig(
   eslint.configs.recommended,
   tseslint.configs.strictTypeChecked,
   {
@@ -16,7 +17,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["tests/**/*.spec.ts"],
+    files: ["packages/*/tests/**/*.spec.ts", "tests/**/*.spec.ts"],
     plugins: { vitest },
     rules: {
       ...vitest.configs.recommended.rules,
