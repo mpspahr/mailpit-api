@@ -28,3 +28,5 @@ npm install mailpit-api mailpit-ws
 ## Documentation
 
 [Detailed documentation](https://mpspahr.github.io/mailpit-api/) covering all available methods and type definitions for both packages.
+
+Upgrading from v1? See the [upgrade guide](./UPGRADING.md).

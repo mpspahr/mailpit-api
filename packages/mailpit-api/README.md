@@ -19,6 +19,8 @@ npm install mailpit-api
 
 [Detailed documentation](https://mpspahr.github.io/mailpit-api/modules/mailpit-api.html) covering all available methods and type definitions.
 
+Upgrading from v1? See the [upgrade guide](https://github.com/mpspahr/mailpit-api/blob/main/UPGRADING.md).
+
 ## Usage
 
 **Prerequisites:** These examples require a Mailpit installation. See the [Mailpit installation guide](https://mailpit.axllent.org/docs/install/).
