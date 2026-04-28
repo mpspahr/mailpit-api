@@ -137,7 +137,7 @@ describe("MailpitClient", () => {
       text: () => Promise.reject(new Error("stream error")),
       blob: () => Promise.reject(new Error("stream error")),
       headers: new Headers(),
-    } as unknown as Response);
+    });
     await expect(client.getInfo()).rejects.toThrow(
       "Mailpit API Error: SyntaxError: Unexpected token at GET http://localhost:8025/api/v1/info",
     );
