@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [18, 20, 22, 24] # legacy, maintenance, lts, current
+        node-version: [20, 22, 24] # legacy, maintenance, lts, current
     name: Node ${{ matrix.node-version }} Test
     env:
       USERNAME: ${{ github.actor }}
@@ -41,7 +41,7 @@ jobs:
         env:
           MP_ENABLE_SPAMASSASSIN: postmark
           MP_ENABLE_CHAOS: true
-          MP_UI_AUTH: ${{ format('{0}:{1}', env.USERNAME, env.PASSWORD) }}
+          MP_UI_AUTH: ${{ format('{0}:{1}', github.actor, github.run_id) }}
         ports:
           - 8025:8025
           - 1025:1025
@@ -60,9 +60,18 @@ jobs:
           npm audit signatures
           npm ls --depth=0
       - name: Run All Tests
-        run: npm run test
-      - name: Upload coverage to Codecov
+        run: npm run coverage
+      - name: Upload mailpit-api coverage to Codecov
         if: matrix.node-version == 24 && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          flags: mailpit-api
+          files: coverage/lcov.info
+      - name: Upload mailpit-ws coverage to Codecov
+        if: matrix.node-version == 24 && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: mailpit-ws
+          files: coverage/lcov.info

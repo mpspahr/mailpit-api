@@ -1,14 +1,14 @@
 import eslint from "@eslint/js";
-import jest from "eslint-plugin-jest";
+import vitest from "@vitest/eslint-plugin";
+import { defineConfig } from "eslint/config";
 import tseslint from "typescript-eslint";
 
-export default tseslint.config(
+export default defineConfig(
   eslint.configs.recommended,
   tseslint.configs.strictTypeChecked,
-  jest.configs["flat/recommended"],
   {
     plugins: {
-      jest,
+      vitest,
     },
     languageOptions: {
       parserOptions: {
@@ -17,10 +17,13 @@ export default tseslint.config(
     },
   },
   {
-    files: ["tests/**/*.spec.ts"],
+    files: ["packages/*/tests/**/*.spec.ts", "tests/**/*.spec.ts"],
+    plugins: { vitest },
     rules: {
+      ...vitest.configs.recommended.rules,
       "@typescript-eslint/unbound-method": "off",
-      "jest/unbound-method": "error",
+      // expect.any() / expect.objectContaining() etc. return `any` by design
+      "@typescript-eslint/no-unsafe-assignment": "off",
     },
   },
 );

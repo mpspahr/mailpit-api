@@ -1,117 +1,32 @@
-# Mailpit API Client
+# Mailpit API and WebSocket Clients
 
-[![Package Version](https://img.shields.io/npm/v/mailpit-api.svg?label=npm)](https://www.npmjs.com/package/mailpit-api)
+[![Package Version](https://img.shields.io/npm/v/mailpit-api.svg?label=mailpit-api)](https://www.npmjs.com/package/mailpit-api)
+[![Package Version](https://img.shields.io/npm/v/mailpit-ws.svg?label=mailpit-ws)](https://www.npmjs.com/package/mailpit-ws)
 [![Test Suite](https://github.com/mpspahr/mailpit-api/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/mpspahr/mailpit-api/actions/workflows/test.yml)
 [![Code Coverage](https://codecov.io/gh/mpspahr/mailpit-api/graph/badge.svg?token=VUWKIYK1WM)](https://codecov.io/gh/mpspahr/mailpit-api)
 [![Documentation](https://github.com/mpspahr/mailpit-api/actions/workflows/deploy-docs.yml/badge.svg?branch=main&label=docs)](https://mpspahr.github.io/mailpit-api/)
 
-A TypeScript client for interacting with [Mailpit](https://mailpit.axllent.org/)'s [REST API](https://mailpit.axllent.org/docs/api-v1/view.html#get-/api/v1/info). Ideal for automating your email testing. Works in **Node.js, browser, and any modern JS runtime**.
+TypeScript clients for interacting with [Mailpit](https://mailpit.axllent.org/). Ideal for automating your email testing. Works in **Node.js, browser, and any modern JS runtime**.
 
-## Installation
+## Packages
+
+| Package                                                                                | Description                           | Docs                                                                            |
+| -------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------- |
+| [`mailpit-api`](https://github.com/mpspahr/mailpit-api/tree/main/packages/mailpit-api) | REST API client - zero dependencies   | [API Reference](https://mpspahr.github.io/mailpit-api/modules/mailpit-api.html) |
+| [`mailpit-ws`](https://github.com/mpspahr/mailpit-api/tree/main/packages/mailpit-ws)   | WebSocket client for real-time events | [API Reference](https://mpspahr.github.io/mailpit-api/modules/mailpit-ws.html)  |
+
+## Quick Start
 
 ```bash
+# REST API only (zero dependencies)
 npm install mailpit-api
+
+# REST API + real-time events
+npm install mailpit-api mailpit-ws
 ```
 
 ## Documentation
 
-[Detailed documentation](https://mpspahr.github.io/mailpit-api/) covering all available methods and type definitions.
+[Detailed documentation](https://mpspahr.github.io/mailpit-api/) covering all available methods and type definitions for both packages.
 
-## Usage
-
-**Prerequisites:** These examples require a Mailpit installation. See the [Mailpit installation guide](https://mailpit.axllent.org/docs/install/).
-
-### Example
-
-```typescript
-import { MailpitClient } from "mailpit-api";
-
-// Initialize the API client
-const mailpit = new MailpitClient("http://localhost:8025");
-
-// Send a message
-await mailpit.sendMessage({
-  From: { Email: "user@example.test" },
-  To: [{ Email: "rec@example.test" }],
-  Subject: "Test Email",
-});
-
-// Get a summary of all messages
-const messages = await mailpit.listMessages();
-
-// Delete all messages
-await mailpit.deleteMessages();
-```
-
-### Using with Playwright Tests
-
-Use `mailpit-api` with [Playwright](https://playwright.dev/) as a custom [test fixture](https://playwright.dev/docs/test-fixtures) to handle email testing.
-
-```typescript
-// fixtures.ts
-import { test as base } from "@playwright/test";
-import { MailpitClient } from "mailpit-api";
-
-type MyFixtures = {
-  mailpit: MailpitClient;
-};
-
-export const test = base.extend<MyFixtures>({
-  mailpit: async ({}, use) => {
-    const mailpit = new MailpitClient("http://localhost:8025");
-    await mailpit.deleteMessages();
-    await use(mailpit);
-    mailpit.disconnect();
-  },
-});
-
-export { expect } from "@playwright/test";
-```
-
-```typescript
-// tests/register.spec.ts
-import { test, expect } from "../fixtures";
-
-test("should receive welcome email after registration", async ({
-  page,
-  mailpit,
-}) => {
-  await page.goto("/register");
-  await page.getByTestId("email").fill("test@example.test");
-  await page.getByTestId("password").fill("password123");
-  await page.getByTestId("submit").click();
-
-  await expect(page.getByTestId("success-message")).toBeVisible();
-
-  // Wait for the welcome email (up to 5 seconds by default)
-  const message = await mailpit.waitForMessage({
-    query: "subject:Welcome to Our App",
-  });
-
-  expect(message.To[0].Address).toBe("test@example.test");
-  expect(message.From.Address).toBe("no-reply@your-app.test");
-  expect(message.Subject).toBe("Welcome to Our App");
-});
-```
-
-### Waiting for Emails
-
-Choose the right method based on what you need:
-
-| Scenario                                                    | Method                                                                                                                                                                                      |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Wait for a specific message (by subject, sender, etc.)      | [`waitForMessage()`](https://mpspahr.github.io/mailpit-api/classes/MailpitClient.html#waitformessage)                                                                                       |
-| Wait for N messages to exist (optionally matching a search) | [`waitForMessages()`](https://mpspahr.github.io/mailpit-api/classes/MailpitClient.html#waitformessages)                                                                                     |
-| Real-time notification of any new message                   | [`waitForEvent()`](https://mpspahr.github.io/mailpit-api/classes/MailpitClient.html#waitforevent) / [`onEvent()`](https://mpspahr.github.io/mailpit-api/classes/MailpitClient.html#onevent) |
-
-See the [full documentation](https://mpspahr.github.io/mailpit-api/classes/MailpitClient.html) for detailed examples and options for each method.
-
-### Using in the Browser
-
-`mailpit-api` is fully compatible with browser environments. Start Mailpit with the `--api-cors` flag to allow requests from your app's origin:
-
-```bash
-mailpit --api-cors="http://localhost:5173"
-```
-
-> **Note:** Basic authentication is **not supported for WebSocket connections in browsers**. The native `WebSocket` API does not allow custom headers. REST API calls are unaffected. This limitation does not apply to Node.js.
+Upgrading from v1? See the [upgrade guide](./UPGRADING.md).
