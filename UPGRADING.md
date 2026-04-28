@@ -36,10 +36,14 @@ The options object also accepts an optional `fetchOptions` field (see below).
 **Before:**
 
 ```typescript
-const mailpit = new MailpitClient("http://localhost:8025", { username: "user", password: "pass" }, {
-  headers: { Cookie: "session=abc123" },
-  httpsAgent: new https.Agent({ rejectUnauthorized: false }),
-});
+const mailpit = new MailpitClient(
+  "http://localhost:8025",
+  { username: "user", password: "pass" },
+  {
+    headers: { Cookie: "session=abc123" },
+    httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+  },
+);
 ```
 
 **After:**
@@ -61,7 +65,7 @@ const mailpit = new MailpitClient("https://localhost:8025", {
 
 All WebSocket/event-related functionality has been extracted into a separate [`mailpit-ws`](https://www.npmjs.com/package/mailpit-ws) package to make `mailpit-api` zero-dependency. The `MailpitClient` class no longer includes WebSocket methods.
 
-**Moved methods** (now in `mailpit-ws`):*
+**Moved methods** (now in `mailpit-ws`):\*
 
 - `disconnect()`
 - `onEvent()`
@@ -78,7 +82,10 @@ npm install mailpit-ws
 ```typescript
 // Before
 import { MailpitClient } from "mailpit-api";
-const mailpit = new MailpitClient("http://localhost:8025", { username: "user", password: "pass" });
+const mailpit = new MailpitClient("http://localhost:8025", {
+  username: "user",
+  password: "pass",
+});
 mailpit.onEvent("new", (event) => console.log(event));
 mailpit.disconnect();
 
