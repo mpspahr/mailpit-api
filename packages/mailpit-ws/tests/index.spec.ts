@@ -38,7 +38,7 @@ vi.mock("partysocket/ws", () => {
 describe("MailpitEvents", () => {
   let events: MailpitEvents;
   let internalEvents: {
-    connect: () => void;
+    connect: () => Promise<void>;
     disconnect: () => void;
     webSocket: ReconnectingWebSocket | null;
     onEvent: (
@@ -108,14 +108,149 @@ describe("MailpitEvents", () => {
     ).toBeNull();
   });
 
-  test("connect() should return early when already connected", () => {
+  test("connect() should return early when already connected", async () => {
     const existingWebSocket = {
       readyState: ReconnectingWebSocket.OPEN,
     } as unknown as ReconnectingWebSocket;
 
     internalEvents.webSocket = existingWebSocket;
-    internalEvents.connect();
+    await internalEvents.connect();
     expect(internalEvents.webSocket).toBe(existingWebSocket);
+  });
+
+  test("connect() should return a resolved Promise when socket is already open", async () => {
+    const existingWebSocket = {
+      readyState: ReconnectingWebSocket.OPEN,
+    } as unknown as ReconnectingWebSocket;
+
+    internalEvents.webSocket = existingWebSocket;
+    const result = internalEvents.connect();
+    expect(result).toBeInstanceOf(Promise);
+    await expect(result).resolves.toBeUndefined();
+  });
+
+  test("connect() should return a pending Promise that resolves when the socket opens", async () => {
+    // Mock a CONNECTING socket so connect() returns a pending Promise.
+    (ReconnectingWebSocket as unknown as Mock).mockImplementationOnce(function (
+      this: Record<string, unknown>,
+    ) {
+      this.readyState = ReconnectingWebSocket.CONNECTING;
+      this.addEventListener = vi.fn(
+        (event: string, handler: (...args: never[]) => void) => {
+          const handlers = mockWebSocketHandlers.get(event) ?? [];
+          handlers.push(handler);
+          mockWebSocketHandlers.set(event, handlers);
+        },
+      );
+      this.removeEventListener = vi.fn();
+      this.close = vi.fn();
+    });
+
+    const connectPromise = internalEvents.connect();
+    expect(connectPromise).toBeInstanceOf(Promise);
+
+    // Promise should still be pending before the open event fires.
+    let resolved = false;
+    void connectPromise.then(() => {
+      resolved = true;
+    });
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+
+    // Fire the open event - all registered open handlers should run.
+    const openHandlers = mockWebSocketHandlers.get("open") ?? [];
+    expect(openHandlers.length).toBeGreaterThan(0);
+    openHandlers.forEach((h) => {
+      h({} as never);
+    });
+
+    await connectPromise;
+    expect(resolved).toBe(true);
+  });
+
+  test("connect() should create a new socket when existing socket is CLOSING", () => {
+    const closingWebSocket = {
+      readyState: ReconnectingWebSocket.CLOSING,
+    } as unknown as ReconnectingWebSocket;
+
+    internalEvents.webSocket = closingWebSocket;
+    void internalEvents.connect();
+    // A new socket should have been created to replace the CLOSING one
+    expect(internalEvents.webSocket).not.toBe(closingWebSocket);
+    expect(internalEvents.webSocket).not.toBeNull();
+  });
+
+  test("connect() should reject when disconnect() is called before the socket opens", async () => {
+    // Mock a CONNECTING socket so connect() returns a pending Promise.
+    (ReconnectingWebSocket as unknown as Mock).mockImplementationOnce(function (
+      this: Record<string, unknown>,
+    ) {
+      this.readyState = ReconnectingWebSocket.CONNECTING;
+      this.addEventListener = vi.fn(
+        (event: string, handler: (...args: never[]) => void) => {
+          const handlers = mockWebSocketHandlers.get(event) ?? [];
+          handlers.push(handler);
+          mockWebSocketHandlers.set(event, handlers);
+        },
+      );
+      this.removeEventListener = vi.fn();
+      this.close = vi.fn();
+    });
+
+    const connectPromise = internalEvents.connect();
+
+    // Simulate disconnect() - sets webSocket to null then fires close on the old socket
+    internalEvents.webSocket = null;
+    const closeHandlers = mockWebSocketHandlers.get("close") ?? [];
+    closeHandlers.forEach((h) => {
+      h({} as never);
+    });
+
+    await expect(connectPromise).rejects.toThrow(
+      "WebSocket connection closed before opening",
+    );
+  });
+
+  test("connect() should not reject when ReconnectingWebSocket fires close during a reconnect cycle", async () => {
+    // Mock a CONNECTING socket so connect() returns a pending Promise.
+    (ReconnectingWebSocket as unknown as Mock).mockImplementationOnce(function (
+      this: Record<string, unknown>,
+    ) {
+      this.readyState = ReconnectingWebSocket.CONNECTING;
+      this.addEventListener = vi.fn(
+        (event: string, handler: (...args: never[]) => void) => {
+          const handlers = mockWebSocketHandlers.get(event) ?? [];
+          handlers.push(handler);
+          mockWebSocketHandlers.set(event, handlers);
+        },
+      );
+      this.removeEventListener = vi.fn();
+      this.close = vi.fn();
+    });
+
+    const connectPromise = internalEvents.connect();
+
+    // Simulate a reconnect-cycle close (webSocket is still the same instance - NOT replaced)
+    const closeHandlers = mockWebSocketHandlers.get("close") ?? [];
+    closeHandlers.forEach((h) => {
+      h({} as never);
+    });
+
+    // Promise should still be pending - not rejected - because webSocket wasn't replaced
+    let rejected = false;
+    void connectPromise.catch(() => {
+      rejected = true;
+    });
+    await Promise.resolve();
+    expect(rejected).toBe(false);
+
+    // Now fire open - promise should resolve
+    const openHandlers = mockWebSocketHandlers.get("open") ?? [];
+    openHandlers.forEach((h) => {
+      h({} as never);
+    });
+    await connectPromise;
+    expect(rejected).toBe(false);
   });
 
   test("waitForEvent() should reject if connect() throws", async () => {
@@ -156,7 +291,7 @@ describe("MailpitEvents", () => {
   test("disconnect() should terminate the inner socket for clean process exit", () => {
     const mockTerminate = vi.fn();
 
-    internalEvents.connect();
+    void internalEvents.connect();
     expect(internalEvents.webSocket).not.toBeNull();
 
     const ws = internalEvents.webSocket as unknown as Record<string, unknown>;
@@ -171,7 +306,7 @@ describe("MailpitEvents", () => {
   test("connect() should unref the underlying socket and timers on open", () => {
     const mockUnref = vi.fn();
 
-    internalEvents.connect();
+    void internalEvents.connect();
 
     const openHandlers = mockWebSocketHandlers.get("open") ?? [];
     expect(openHandlers.length).toBeGreaterThan(0);

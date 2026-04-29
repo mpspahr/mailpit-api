@@ -252,75 +252,132 @@ export class MailpitEvents {
    * Connects to the WebSocket endpoint for receiving real-time events.
    * @remarks
    * Called automatically by {@link MailpitEvents.onEvent | onEvent()} and {@link MailpitEvents.waitForEvent | waitForEvent()}.
-   * You only need to call this directly if you want to establish the connection before registering listeners.
+   *
+   * Returns a `Promise<void>` that resolves once the connection is open. Await this
+   * before triggering actions that generate events (e.g. sending an email) to avoid
+   * the race condition where the event is broadcast before the socket is ready:
+   *
+   * ```typescript
+   * // Register the listener first so no events are missed during the connection phase
+   * const eventPromise = events.waitForEvent("new");
+   * // Then ensure the socket is open before triggering the action
+   * await events.connect();
+   * await mailpit.sendMessage({ ... });
+   * const event = await eventPromise;
+   * ```
+   *
+   * If the socket is already open the returned Promise resolves immediately.
+   * @returns A Promise that resolves when the WebSocket connection is open.
    */
-  public connect(): void {
-    // Return if already connected or connecting
-    if (
-      this.webSocket &&
-      (this.webSocket.readyState === ReconnectingWebSocket.OPEN ||
-        this.webSocket.readyState === ReconnectingWebSocket.CONNECTING)
-    ) {
-      return;
+  public connect(): Promise<void> {
+    // Already open - resolve immediately
+    if (this.webSocket?.readyState === ReconnectingWebSocket.OPEN) {
+      return Promise.resolve();
     }
 
-    // Capture private fields for use inside the nested class constructor below.
-    const authHeader = this.#authHeader;
-    const userWsOptions = this.#userWsOptions;
+    // Create a fresh connection when there is no socket, it is fully closed, or
+    // it is closing (a CLOSING socket will never emit open again).
+    if (
+      !this.webSocket ||
+      this.webSocket.readyState === ReconnectingWebSocket.CLOSED ||
+      this.webSocket.readyState === ReconnectingWebSocket.CLOSING
+    ) {
+      // Capture private fields for use inside the nested class constructor below.
+      const authHeader = this.#authHeader;
+      const userWsOptions = this.#userWsOptions;
 
-    // In Node.js, build a custom WebSocket constructor that injects auth headers
-    // and merges any user-provided wsOptions. Browsers cannot set custom headers
-    // on WebSocket connections, so we skip this entirely when using native WebSocket.
-    const wsConstructor =
-      !IS_NATIVE_WEBSOCKET && (authHeader || userWsOptions)
-        ? class AuthenticatedWebSocket extends WS {
-            constructor(address: string, options?: WS.ClientOptions) {
-              super(address, {
-                ...userWsOptions,
-                ...options,
-                headers: {
-                  // User-provided headers from wsOptions and per-call options first,
-                  // then auth header last so it cannot be overridden.
-                  ...(userWsOptions?.headers as Record<string, string>),
-                  ...(options?.headers as Record<string, string>),
-                  ...(authHeader ? { Authorization: authHeader } : {}),
-                },
-              });
+      // In Node.js, build a custom WebSocket constructor that injects auth headers
+      // and merges any user-provided wsOptions. Browsers cannot set custom headers
+      // on WebSocket connections, so we skip this entirely when using native WebSocket.
+      const wsConstructor =
+        !IS_NATIVE_WEBSOCKET && (authHeader || userWsOptions)
+          ? class AuthenticatedWebSocket extends WS {
+              constructor(address: string, options?: WS.ClientOptions) {
+                super(address, {
+                  ...userWsOptions,
+                  ...options,
+                  headers: {
+                    // User-provided headers from wsOptions and per-call options first,
+                    // then auth header last so it cannot be overridden.
+                    ...(userWsOptions?.headers as Record<string, string>),
+                    ...(options?.headers as Record<string, string>),
+                    ...(authHeader ? { Authorization: authHeader } : {}),
+                  },
+                });
+              }
             }
-          }
-        : WS;
+          : WS;
 
-    this.webSocket = new ReconnectingWebSocket(
-      this.wsURL.toString(),
-      undefined,
-      {
+      const ws = new ReconnectingWebSocket(this.wsURL.toString(), undefined, {
         ...this.#reconnectOptions,
         // WebSocket constructor is always set last so users cannot override it
         // via reconnectOptions (Omit<Options, "WebSocket"> at the type level,
         // enforced here at runtime too).
         WebSocket: wsConstructor,
-      },
-    );
+      });
+      this.webSocket = ws;
 
-    this.webSocket.addEventListener("message", (event) => {
-      let message: MailpitEvent;
-      try {
-        message = JSON.parse(event.data as string) as MailpitEvent;
-      } catch {
-        // Silently ignore malformed messages from server
-        return;
-      }
-      this.handleWebSocketMessage(message);
-    });
+      ws.addEventListener("message", (event) => {
+        // Guard against stale listeners from a replaced socket instance.
+        if (this.webSocket !== ws) return;
+        let message: MailpitEvent;
+        try {
+          message = JSON.parse(event.data as string) as MailpitEvent;
+        } catch {
+          // Silently ignore malformed messages from server
+          return;
+        }
+        this.handleWebSocketMessage(message);
+      });
 
-    // Unref the underlying TCP socket and internal timers so the WebSocket
-    // does not prevent the Node.js process from exiting naturally. Called on
-    // every "open" event to cover both initial connections and reconnections.
-    this.webSocket.addEventListener("open", () => {
-      const rws = this.webSocket as unknown as ReconnectingWebSocketInternals;
-      rws._ws?._socket?.unref?.();
-      rws._uptimeTimeout?.unref?.();
-      rws._connectTimeout?.unref?.();
+      // Unref the underlying TCP socket and internal timers so the WebSocket
+      // does not prevent the Node.js process from exiting naturally. Called on
+      // every "open" event to cover both initial connections and reconnections.
+      ws.addEventListener("open", () => {
+        if (this.webSocket !== ws) return;
+        const rws = this.webSocket as unknown as ReconnectingWebSocketInternals;
+        rws._ws?._socket?.unref?.();
+        rws._uptimeTimeout?.unref?.();
+        rws._connectTimeout?.unref?.();
+      });
+    }
+
+    // Check again after construction - mocks or fast local connections may already be OPEN.
+    if (this.webSocket.readyState === ReconnectingWebSocket.OPEN) {
+      return Promise.resolve();
+    }
+
+    // Socket is CONNECTING - return a Promise that settles on the next terminal event.
+    // Resolves when open fires; rejects if the socket is abandoned (disconnect() called
+    // or replaced by a new connect() call) before the handshake completes.
+    // ReconnectingWebSocket fires close/error during normal reconnect cycles and then
+    // retries, so we only reject when this.webSocket has changed (not on transient events).
+    const ws = this.webSocket;
+    return new Promise<void>((resolve, reject) => {
+      const cleanup = () => {
+        ws.removeEventListener("open", onOpen);
+        ws.removeEventListener("close", onClose);
+      };
+
+      const onOpen = () => {
+        if (this.webSocket !== ws) return;
+        cleanup();
+        resolve();
+      };
+
+      // Reject only when the socket is abandoned - either disconnect() set webSocket
+      // to null, or a new connect() call replaced it with a fresh socket instance.
+      // When ReconnectingWebSocket fires close as part of a reconnect cycle, this.webSocket
+      // is still the same ws reference, so we skip rejection and keep waiting for open.
+      const onClose = () => {
+        if (this.webSocket !== ws) {
+          cleanup();
+          reject(new Error("WebSocket connection closed before opening"));
+        }
+      };
+
+      ws.addEventListener("open", onOpen);
+      ws.addEventListener("close", onClose);
     });
   }
 
@@ -423,7 +480,12 @@ export class MailpitEvents {
    *   console.log("New message:", event.Data.Subject);
    * });
    *
-   * // Other code...
+   * // Ensure the socket is open before triggering any action that generates events.
+   * // onEvent() auto-connects, but the handshake is async - events broadcast before
+   * // the socket is open will be silently lost.
+   * await events.connect();
+   *
+   * // Other code that triggers events...
    *
    * // Unsubscribe listener when no longer needed
    * unsubscribe();
@@ -434,6 +496,8 @@ export class MailpitEvents {
    *   // Generic processing for all event types
    *   console.log(`Event ${event.Type} received`);
    * });
+   *
+   * await events.connect();
    *
    * // Other code...
    *
@@ -447,9 +511,10 @@ export class MailpitEvents {
   ): () => void {
     if (
       !this.webSocket ||
-      this.webSocket.readyState === ReconnectingWebSocket.CLOSED
+      this.webSocket.readyState === ReconnectingWebSocket.CLOSED ||
+      this.webSocket.readyState === ReconnectingWebSocket.CLOSING
     ) {
-      this.connect();
+      void this.connect().catch(() => {});
     }
 
     this.addListener(eventType, listener as (event: MailpitEvent) => void);
@@ -476,8 +541,13 @@ export class MailpitEvents {
    * @returns A promise that resolves with the event when received, or rejects on timeout
    * @example Basic usage
    * ```typescript
-   * // Create the promise before triggering the event
+   * // Register the listener first so no events are missed
    * const eventPromise = events.waitForEvent("new");
+   *
+   * // Ensure the socket is open before triggering the action.
+   * // waitForEvent() auto-connects, but the handshake is async - if you trigger
+   * // an action before the socket is open, the event may be broadcast and lost.
+   * await events.connect();
    *
    * // Do something that triggers an email to send
    * await mailpit.sendMessage({
@@ -496,17 +566,6 @@ export class MailpitEvents {
     eventType: T,
     timeout: number = 5_000,
   ): Promise<MailpitEventMap[T]> {
-    try {
-      if (
-        !this.webSocket ||
-        this.webSocket.readyState === ReconnectingWebSocket.CLOSED
-      ) {
-        this.connect();
-      }
-    } catch (error) {
-      return Promise.reject(error as Error);
-    }
-
     return new Promise((resolve, reject) => {
       let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -522,7 +581,30 @@ export class MailpitEvents {
         resolve(event as MailpitEventMap[T]);
       };
 
+      // Register listener BEFORE connecting so no event can be missed during
+      // the async handshake.
       this.addListener(eventType, listener);
+
+      // Auto-connect if needed
+      if (
+        !this.webSocket ||
+        this.webSocket.readyState === ReconnectingWebSocket.CLOSED ||
+        this.webSocket.readyState === ReconnectingWebSocket.CLOSING
+      ) {
+        let connectPromise: Promise<void>;
+        try {
+          connectPromise = this.connect();
+        } catch (error) {
+          cleanup();
+          reject(error instanceof Error ? error : new Error(String(error)));
+          return;
+        }
+        // Propagate connection errors into this promise
+        connectPromise.catch((error: unknown) => {
+          cleanup();
+          reject(error instanceof Error ? error : new Error(String(error)));
+        });
+      }
 
       if (isFinite(timeout)) {
         timer = setTimeout(() => {

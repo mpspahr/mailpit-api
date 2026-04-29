@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import path from "path";
-import { describe, test, expect, afterAll, afterEach } from "vitest";
+import { describe, test, expect, afterAll, afterEach, beforeAll } from "vitest";
 import {
   MailpitClient,
   type MailpitConfigurationResponse,
@@ -114,6 +114,11 @@ describe("Mailpit E2E Tests", () => {
   afterAll(async () => {
     events.disconnect();
     await mailpit.deleteMessages();
+  });
+
+  beforeAll(async () => {
+    // Ensure the WebSocket is connected before any test triggers events.
+    await events.connect();
   });
 
   test("sendMessage() should send message and trigger WebSocket events", async () => {

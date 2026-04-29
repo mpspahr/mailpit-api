@@ -12,10 +12,10 @@ For the REST API client, see [`mailpit-api`](https://www.npmjs.com/package/mailp
 ## Installation
 
 ```bash
-npm install mailpit-api mailpit-ws
+npm install mailpit-ws
 ```
 
-> `mailpit-api` is a peer dependency (required for shared types).
+> `mailpit-api` is a peer dependency. You may need to install it separately if your package manager does not auto-install peer dependencies.
 
 ## Documentation
 
@@ -32,10 +32,15 @@ import { MailpitEvents } from "mailpit-ws";
 
 const events = new MailpitEvents("http://localhost:8025");
 
-// Listen for new messages
+// Register listener before connecting so no events are missed
 const unsubscribe = events.onEvent("new", (event) => {
   console.log("New message:", event.Data.Subject);
 });
+
+// Ensure the socket is open before triggering any action that generates events
+await events.connect();
+
+// trigger app action that sends an email...
 
 // Stop listening
 unsubscribe();
@@ -44,18 +49,35 @@ unsubscribe();
 events.disconnect();
 ```
 
-### Waiting for a Specific Event
+### Playwright Fixture Pattern
+
+If you are using Playwright fixtures, connect once in fixture setup and await it before any test actions run:
 
 ```typescript
+import { test as base } from "@playwright/test";
 import { MailpitEvents } from "mailpit-ws";
 
-const events = new MailpitEvents("http://localhost:8025");
+type Fixtures = { events: MailpitEvents };
 
-// Wait for the next new message event (5 second timeout by default)
-const event = await events.waitForEvent("new");
-console.log("Received:", event.Data.Subject);
+export const test = base.extend<Fixtures>({
+  events: async ({}, use) => {
+    const events = new MailpitEvents("http://localhost:8025");
 
-events.disconnect();
+    // Ensure socket is ready before any test step can trigger events
+    await events.connect();
+
+    await use(events);
+    events.disconnect();
+  },
+});
+
+// In tests: register listeners, then trigger actions
+test("captures new message event", async ({ events }) => {
+  const newEventPromise = events.waitForEvent("new");
+  // trigger app action that sends an email...
+  const newEvent = await newEventPromise;
+  console.log(newEvent.Type);
+});
 ```
 
 ### Event Types
@@ -81,6 +103,6 @@ const events = new MailpitEvents("http://localhost:8025", {
 });
 ```
 
-### Browser Note
+#### Browser Note
 
 > Basic authentication is **not supported for WebSocket connections in browsers**. The native `WebSocket` API does not allow custom headers. This limitation does not apply to Node.js.
