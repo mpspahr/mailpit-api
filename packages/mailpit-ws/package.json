@@ -1,6 +1,6 @@
 {
   "name": "mailpit-ws",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A TypeScript WebSocket client for Mailpit real-time events.",
   "repository": {
     "type": "git",
