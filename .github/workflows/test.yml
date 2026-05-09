@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [20, 22, 24] # legacy, maintenance, lts, current
+        node-version: [20, 22, 24, 26] # legacy, maintenance, lts, current
     name: Node ${{ matrix.node-version }} Test
     env:
       USERNAME: ${{ github.actor }}
