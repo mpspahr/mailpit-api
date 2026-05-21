@@ -299,7 +299,7 @@ describe("Mailpit E2E Tests", () => {
 
       const response = await mailpit.setReadStatus({
         IDs: [messageId],
-        Read: true,
+        Read: false,
       });
       expect(response).toBe("ok");
 
@@ -309,7 +309,7 @@ describe("Mailpit E2E Tests", () => {
         Type: "update",
         Data: {
           ID: messageId,
-          Read: true,
+          Read: false,
         },
       });
 
