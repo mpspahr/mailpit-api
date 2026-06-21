@@ -28,7 +28,7 @@ export interface MailpitClientOptions {
    * ```typescript
    * { fetchOptions: { headers: { Cookie: "session=abc123" } } }
    * ```
-   * @example Disabling TLS verification in Node.js (undici `Agent`)
+   * @example Disabling TLS verification in Node.js (undici Agent)
    * ```typescript
    * import { Agent } from "undici";
    * { fetchOptions: { dispatcher: new Agent({ connect: { rejectUnauthorized: false } }) } }
@@ -639,10 +639,12 @@ export class MailpitClient {
         headers: mergedHeaders,
         body: JSON.stringify(body),
       });
-    } catch (error: unknown) {
+    } catch (error) {
       // Per the Fetch spec, fetch() only throws TypeError (network or setup failures).
+      const reason = error instanceof Error ? error.message : String(error);
       throw new Error(
-        `Mailpit API Error: No response received from server at ${method} ${urlString}: ${(error as Error).message}`,
+        `Mailpit API Error: No response received from server at ${method} ${urlString}: ${reason}`,
+        { cause: error },
       );
     }
 
@@ -662,8 +664,12 @@ export class MailpitClient {
         return (await response.json()) as T;
       }
     } catch (error: unknown) {
+      const reason = error instanceof Error ? error.message : String(error);
       throw new Error(
-        `Mailpit API Error: ${(error as Error).toString()} at ${method} ${urlString}`,
+        `Mailpit API Error: ${reason} at ${method} ${urlString}`,
+        {
+          cause: error,
+        },
       );
     }
   }
