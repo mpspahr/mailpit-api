@@ -139,7 +139,7 @@ describe("MailpitClient", () => {
       headers: new Headers(),
     });
     await expect(client.getInfo()).rejects.toThrow(
-      "Mailpit API Error: SyntaxError: Unexpected token at GET http://localhost:8025/api/v1/info",
+      "Mailpit API Error: Unexpected token at GET http://localhost:8025/api/v1/info",
     );
   });
 
