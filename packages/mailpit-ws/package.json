@@ -60,8 +60,8 @@
   "license": "MIT",
   "dependencies": {
     "isomorphic-ws": "^5.0.0",
-    "partysocket": "^1.1.10",
-    "ws": "^8.18.3"
+    "partysocket": "^1.2.0",
+    "ws": "^8.21.0"
   },
   "peerDependencies": {
     "mailpit-api": "^2.0.0"
