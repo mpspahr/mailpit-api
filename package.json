@@ -26,19 +26,19 @@
   "license": "MIT",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/node": "^26.0.0",
+    "@types/node": "^26.1.0",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.1.9",
     "@vitest/eslint-plugin": "^1.6.20",
     "dotenv": "^17.3.1",
-    "eslint": "^10.5.0",
-    "prettier": "^3.8.4",
+    "eslint": "^10.6.0",
+    "prettier": "^3.9.4",
     "tsdown": "^0.22.3",
     "tsx": "^4.22.4",
     "typedoc": "^0.28.19",
     "typedoc-github-theme": "^0.4.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.61.1",
+    "typescript-eslint": "^8.62.1",
     "vitest": "^4.1.2"
   }
 }

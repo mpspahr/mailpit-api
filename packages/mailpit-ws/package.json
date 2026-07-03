@@ -60,7 +60,7 @@
   "license": "MIT",
   "dependencies": {
     "isomorphic-ws": "^5.0.0",
-    "partysocket": "^1.2.0",
+    "partysocket": "^1.3.0",
     "ws": "^8.21.0"
   },
   "peerDependencies": {

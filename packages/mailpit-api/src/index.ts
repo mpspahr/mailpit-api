@@ -1048,8 +1048,7 @@ export class MailpitClient {
   ): Promise<MailpitMessagesSummaryResponse>;
   public async waitForMessages(
     requestOrOptions?:
-      | MailpitWaitForMessagesRequest
-      | MailpitWaitForMessageRequest,
+      MailpitWaitForMessagesRequest | MailpitWaitForMessageRequest,
     options?: MailpitWaitForMessageRequest,
   ): Promise<MailpitMessagesSummaryResponse> {
     const isOptionsOnly =
