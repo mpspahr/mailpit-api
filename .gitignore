@@ -137,3 +137,6 @@ vite.config.ts
 
 # Documentation
 docs/
+
+# Finder
+.DS_Store
