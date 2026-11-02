@@ -181,6 +181,8 @@ export interface MailpitConfigurationResponse {
     /** The configured SMTP server address */
     SMTPServer: string;
   };
+  /** Whether Rspamd is enabled */
+  Rspamd: boolean;
   /** Whether SpamAssassin is enabled */
   SpamAssassin: boolean;
 }
@@ -435,6 +437,34 @@ export interface MailpitSpamAssassinResponse {
     | null;
   /** Total spam score based on triggered rules */
   Score: number;
+}
+
+/** Response from the {@link MailpitClient.rspamdCheck | rspamdCheck()} API containing Rspamd check results. */
+export interface MailpitRspamdResponse {
+  /** Action Rspamd recommends, eg: "no action", "greylist", "add header", "reject" */
+  Action: string;
+  /** If populated will return an error string */
+  Error: string;
+  /** Whether the message is spam or not */
+  IsSpam: boolean;
+  /**
+   * Rspamd symbols triggered and their score, sorted by highest score first.
+   * @remarks The rules may return `null` if there is an error. Check the `Error` property for details.
+   */
+  Rules:
+    | {
+        /** Rspamd symbol description */
+        Description: string;
+        /** Rspamd symbol name */
+        Name: string;
+        /** Symbol score */
+        Score: number;
+      }[]
+    | null;
+  /** Total spam score based on triggered symbols */
+  Score: number;
+  /** Score at which Rspamd will start to treat a message as spam */
+  Threshold: number;
 }
 
 /** Request parameters for the {@link MailpitClient.setReadStatus | setReadStatus()} API. */
@@ -1163,6 +1193,24 @@ export class MailpitClient {
     return await this.request<MailpitSpamAssassinResponse>(
       "GET",
       `/api/v1/message/${id}/sa-check`,
+    );
+  }
+
+  /**
+   * Performs an Rspamd check (if enabled) on a specific message.
+   * @param id - The message database ID. Defaults to `latest` to return the latest message.
+   * @returns The Rspamd summary (if enabled)
+   * @example
+   * ```typescript
+   * const rspamdCheck = await mailpit.rspamdCheck();
+   * ```
+   */
+  public async rspamdCheck(
+    id: string = "latest",
+  ): Promise<MailpitRspamdResponse> {
+    return await this.request<MailpitRspamdResponse>(
+      "GET",
+      `/api/v1/message/${id}/rspamd-check`,
     );
   }
 

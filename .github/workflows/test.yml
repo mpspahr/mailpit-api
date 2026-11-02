@@ -35,11 +35,29 @@ jobs:
     env:
       USERNAME: ${{ github.actor }}
       PASSWORD: ${{ github.run_id }}
+      RELAY_BASEURL: http://localhost:8026
     services:
+      spamassassin:
+        image: axllent/spamassassin # Uses the image's built-in healthcheck
+      # Second Mailpit instance used as the SMTP relay target for releaseMessage()
+      mailpit-relay:
+        image: axllent/mailpit
+        ports:
+          - 8026:8025
+      rspamd:
+        image: rspamd/rspamd
+        # Uses the image's built-in healthcheck; shorten the interval so steps start sooner
+        options: >-
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
       mailpit:
         image: axllent/mailpit
         env:
-          MP_ENABLE_SPAMASSASSIN: postmark
+          MP_ENABLE_RSPAMD: rspamd:11333
+          MP_ENABLE_SPAMASSASSIN: spamassassin:783
+          MP_SMTP_RELAY_HOST: mailpit-relay
+          MP_SMTP_RELAY_PORT: 1025
           MP_ENABLE_CHAOS: true
           MP_UI_AUTH: ${{ format('{0}:{1}', github.actor, github.run_id) }}
         ports:

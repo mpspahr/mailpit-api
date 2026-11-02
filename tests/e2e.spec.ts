@@ -13,7 +13,13 @@ dotenv.config();
 
 describe("Mailpit E2E Tests", () => {
   // Ensure required environment variables are set
-  const { BASEURL = "http://localhost:8025", USERNAME, PASSWORD } = process.env;
+  const {
+    BASEURL = "http://localhost:8025",
+    USERNAME,
+    PASSWORD,
+    // Optional: base URL of a Mailpit instance acting as the SMTP relay target
+    RELAY_BASEURL,
+  } = process.env;
   if (!USERNAME || !PASSWORD) {
     throw new Error("Missing required environment variables");
   }
@@ -187,6 +193,7 @@ describe("Mailpit E2E Tests", () => {
           ReturnPath: expect.any(String),
           SMTPServer: expect.any(String),
         },
+        Rspamd: expect.any(Boolean),
         SpamAssassin: expect.any(Boolean),
       });
     });
@@ -280,9 +287,18 @@ describe("Mailpit E2E Tests", () => {
       const releaseResponse = await mailpit.releaseMessage(messageId, {
         To: ["user1@example.test"],
       });
-      expect(releaseResponse).toEqual({
-        ID: messageId,
-      });
+      expect(releaseResponse).toBe("ok");
+
+      // If the relay target is a Mailpit instance we can reach, verify delivery
+      if (RELAY_BASEURL) {
+        const relayMailpit = new MailpitClient(RELAY_BASEURL);
+        // Release keeps the original headers; the relay recipient only appears as Bcc
+        const relayed = await relayMailpit.waitForMessage({
+          query: "bcc:user1@example.test",
+        });
+        // eslint-disable-next-line vitest/no-conditional-expect
+        expect(relayed.Subject).toBe(sendRequest.Subject);
+      }
     });
 
     test("listMessages() should return a summary list of messages", async () => {
@@ -420,30 +436,46 @@ describe("Mailpit E2E Tests", () => {
         return;
       }
 
-      const spamResponse = await mailpit.spamAssassinCheck(messageId);
-      /* eslint-disable vitest/no-conditional-expect */
-      const expectedResponse =
-        spamResponse.Error !== "" // Service error from postmark (e.g. timeout) - just verify the shape
-          ? {
-              Error: expect.stringContaining("postmark"),
-              IsSpam: expect.any(Boolean),
-              Rules: null,
-              Score: expect.any(Number),
-            }
-          : {
-              Error: "",
-              IsSpam: expect.any(Boolean),
-              Rules: expect.arrayContaining([
-                expect.objectContaining({
-                  Description: expect.any(String),
-                  Name: expect.any(String),
-                  Score: expect.any(Number),
-                }),
-              ]),
-              Score: expect.any(Number),
-            };
-      expect(spamResponse).toEqual(expectedResponse);
-      /* eslint-enable vitest/no-conditional-expect */
+      const expectedResponse = {
+        Error: "",
+        IsSpam: expect.any(Boolean),
+        Rules: expect.arrayContaining([
+          expect.objectContaining({
+            Description: expect.any(String),
+            Name: expect.any(String),
+            Score: expect.any(Number),
+          }),
+        ]),
+        Score: expect.any(Number),
+      };
+      expect(await mailpit.spamAssassinCheck(messageId)).toEqual(
+        expectedResponse,
+      );
+      expect(await mailpit.spamAssassinCheck()).toEqual(expectedResponse);
+    });
+
+    test("rspamdCheck() should return Rspamd results for a message", async () => {
+      if (!config.Rspamd) {
+        console.log("Rspamd is disabled, skipping rspamdCheck() test.");
+        return;
+      }
+
+      const expectedResponse = {
+        Action: expect.any(String),
+        Error: "",
+        IsSpam: expect.any(Boolean),
+        Rules: expect.arrayContaining([
+          expect.objectContaining({
+            Description: expect.any(String),
+            Name: expect.any(String),
+            Score: expect.any(Number),
+          }),
+        ]),
+        Score: expect.any(Number),
+        Threshold: expect.any(Number),
+      };
+      expect(await mailpit.rspamdCheck(messageId)).toEqual(expectedResponse);
+      expect(await mailpit.rspamdCheck()).toEqual(expectedResponse);
     });
   });
 

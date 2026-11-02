@@ -82,6 +82,27 @@ describe("MailpitClient", () => {
     expect(result).toEqual(mockData);
   });
 
+  test("should call rspamdCheck() and return rspamd check response", async () => {
+    const mockData = {
+      Action: "no action",
+      Error: "",
+      IsSpam: false,
+      Rules: [
+        { Description: "Known content-type", Name: "MIME_GOOD", Score: -0.1 },
+      ],
+      Score: -0.1,
+      Threshold: 15,
+    };
+    mockFetch.mockResolvedValue(mockJsonResponse(mockData));
+    const result = await client.rspamdCheck("abc123");
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      "http://localhost:8025/api/v1/message/abc123/rspamd-check",
+    );
+    expect(init.method).toBe("GET");
+    expect(result).toEqual(mockData);
+  });
+
   const mockChaosData = {
     Authentication: { ErrorCode: 451, Probability: 5 },
     Recipient: { ErrorCode: 451, Probability: 5 },
