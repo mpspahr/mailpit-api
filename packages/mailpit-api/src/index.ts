@@ -437,6 +437,8 @@ export interface MailpitSpamAssassinResponse {
     | null;
   /** Total spam score based on triggered rules */
   Score: number;
+  /** Score at which a message is treated as spam (the SpamAssassin server's required score, or 5 for Postmark) */
+  Threshold: number;
 }
 
 /** Response from the {@link MailpitClient.rspamdCheck | rspamdCheck()} API containing Rspamd check results. */

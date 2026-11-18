@@ -73,7 +73,13 @@ describe("MailpitClient", () => {
   });
 
   test("should call spamAssassinCheck() and return spam check response", async () => {
-    const mockData = { Errors: 0, IsSpam: false, Rules: [], Score: 0 };
+    const mockData = {
+      Error: "",
+      IsSpam: false,
+      Rules: [],
+      Score: 0,
+      Threshold: 5,
+    };
     mockFetch.mockResolvedValue(mockJsonResponse(mockData));
     const result = await client.spamAssassinCheck();
     const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
