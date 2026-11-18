@@ -447,6 +447,7 @@ describe("Mailpit E2E Tests", () => {
           }),
         ]),
         Score: expect.any(Number),
+        Threshold: expect.any(Number),
       };
       expect(await mailpit.spamAssassinCheck(messageId)).toEqual(
         expectedResponse,
